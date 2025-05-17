@@ -1,0 +1,55 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# TV App Service
+
+## Responsibilities
+- Video playback using Senza ShakaPlayer
+- Remote control navigation (arrow keys, enter, escape)
+- Real-time subtitle display
+- AI assistant overlay interface
+- Basic question answering about current scene
+
+## Technology Stack
+- Vanilla JavaScript ES6+
+- Senza SDK (latest stable version)
+- CSS Grid/Flexbox for layout
+- Webpack for module bundling
+
+## Dependencies
+- Backend Service (WebSocket communication)
+- Senza SDK
+- ShakaPlayer
+
+## Public Interfaces
+- initializePlayer()
+- displaySubtitles()
+- showAIAssistant()
+- handleRemoteControl()
+- toggleSubtitles()
+
+## State Management
+- Use event-driven pattern for UI updates
+- Maintain simple state object for current video context
+- Use PubSub pattern for component communication
+
+## UI Components
+- VideoPlayer: Main content display
+- SubtitleOverlay: Text display at bottom of screen
+- AIAssistant: Overlay for Q&A interface
+- RemoteNavigation: Focus management system
+
+## Accessibility Guidelines
+- High contrast UI elements
+- Focus indicators for remote navigation
+- Text resizing support
+- Alternative control methods
+
+## Testing Strategy
+- Unit tests for core functionality
+- Integration tests with mock backend responses
+- E2E tests for critical user flows
+- Performance testing for rendering speed
+

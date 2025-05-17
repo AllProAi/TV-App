@@ -1,0 +1,55 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Mobile Companion App Service
+
+## Responsibilities
+- QR code pairing with TV
+- Virtual remote control (d-pad, media controls)
+- Text input for questions
+- Voice input for commands
+- Real-time chat interface with AI
+
+## Technology Stack
+- Vanilla JavaScript (Progressive Web App)
+- Socket.io for real-time messaging
+- WebRTC for voice streaming
+- Responsive CSS with touch optimization
+
+## Dependencies
+- Backend Service (WebSocket, WebRTC)
+- Mobile browser audio/camera APIs
+
+## Public Interfaces
+- pairWithTV(qrCode)
+- sendVoiceCommand(audioStream)
+- sendTextQuery(text)
+- useRemoteControl(direction)
+- receiveAIResponse(message)
+
+## State Management
+- Progressive Web App state persistence
+- Connection status tracking
+- Input history management
+- Voice recording state control
+
+## UI Components
+- QR Scanner: TV pairing
+- RemoteControl: D-pad and media controls
+- ChatInterface: Q&A with AI assistant
+- VoiceInputPanel: Record and send voice
+- StatusIndicator: Connection status display
+
+## Mobile-Specific Guidelines
+- Touch target size minimum 44px
+- Support for portrait and landscape orientations
+- Battery-efficient background processing
+- Offline fallback for basic functionality
+
+## Testing Strategy
+- Cross-browser testing (Chrome, Safari, Firefox)
+- Device compatibility testing
+- Network condition simulation
+- Battery consumption monitoring

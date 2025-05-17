@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MemoryStream TV</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <!-- Main App Container -->
+    <div id="loading-screen" class="fullscreen-overlay">
+      <div class="loading-content">
+        <div class="logo">MemoryStream</div>
+        <div class="spinner"></div>
+        <div class="loading-text">Loading...</div>
+      </div>
+    </div>
+    
+    <!-- Pairing Screen -->
+    <div id="pairing-screen" class="fullscreen-overlay hidden">
+      <div class="pairing-content">
+        <div class="logo">MemoryStream</div>
+        <h2>Scan QR Code to Control</h2>
+        <div id="qrcode-container"></div>
+        <div class="pairing-instructions">
+          <p>Use your mobile device to scan this QR code and control the TV experience.</p>
+          <p>Session ID: <span id="session-id"></span></p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Video Player Container -->
+    <div id="video-container">
+      <video id="video-player" autoplay></video>
+      
+      <!-- Subtitle Container -->
+      <div id="subtitle-container"></div>
+      
+      <!-- AI Assistant Overlay -->
+      <div id="ai-assistant" class="hidden">
+        <div class="ai-header">
+          <div class="ai-title">MemoryStream AI</div>
+          <div class="ai-close" tabindex="0">×</div>
+        </div>
+        <div class="ai-content">
+          <div id="ai-messages"></div>
+        </div>
+      </div>
+      
+      <!-- Controls Overlay -->
+      <div id="controls-overlay" class="hidden">
+        <div class="control-bar">
+          <button id="play-pause-btn" class="control-btn" tabindex="0">▶</button>
+          <div class="progress-container">
+            <div class="progress-bar">
+              <div class="progress-fill"></div>
+            </div>
+            <div class="time-display">
+              <span id="current-time">00:00</span> / <span id="total-time">00:00</span>
+            </div>
+          </div>
+          <button id="subtitle-toggle-btn" class="control-btn" tabindex="0">CC</button>
+          <button id="ai-toggle-btn" class="control-btn" tabindex="0">AI</button>
+        </div>
+      </div>
+      
+      <!-- Status Indicator -->
+      <div id="status-indicator">
+        <div id="connection-status" class="status-item">
+          <span class="status-icon">●</span>
+          <span class="status-text">Connecting...</span>
+        </div>
+        <div id="mobile-status" class="status-item hidden">
+          <span class="status-icon">📱</span>
+          <span class="status-text">0 connected</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Remote Focus Debug (hidden in production) -->
+    <div id="focus-debug" class="hidden">
+      <div class="focus-element" tabindex="-1">Current Focus: <span id="focus-element-name">None</span></div>
+    </div>
+  </div>
+</body>
+</html> 

@@ -1,0 +1,50 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# MemoryStream Architecture
+
+## System Overview
+MemoryStream is an AI-powered TV application that transforms passive viewing into an interactive, intelligent experience with real-time subtitles, voice control, and contextual Q&A capabilities.
+
+## Key Components
+- TV App (Senza Platform)
+- Mobile Companion App (PWA)
+- Backend Server (Node.js)
+
+## Core Principles
+- Modularity: Components should be loosely coupled
+- Performance: Optimize for low latency in user interactions
+- Reliability: Implement graceful degradation for all AI features
+- Accessibility: Follow WCAG 2.1 AA guidelines
+
+## System Boundaries
+- TV App: User interface, video playback, subtitle display
+- Mobile App: Voice input, text chat, remote control
+- Backend: AI processing, session management, WebSocket communication
+
+## Technology Stack
+- Frontend (TV): Vanilla JavaScript, ShakaPlayer, CSS Grid/Flexbox
+- Frontend (Mobile): PWA, Socket.io, WebRTC
+- Backend: Node.js, Express, Socket.io, OpenAI SDK
+- Infrastructure: Senza cloud, Cloudflare CDN
+
+## Error Handling Strategy
+- Implement circuit breakers for AI service calls
+- Provide fallback responses for all AI features
+- Log errors with context for debugging
+- Present user-friendly error messages
+
+## Performance Requirements
+- Video playback: Smooth 60fps
+- Voice command response: <2 seconds
+- Subtitle generation: <3 seconds delay
+- AI query response: <5 seconds
+
+## Security Guidelines
+- Secure WebSocket connections with authentication
+- Implement rate limiting for API requests
+- Sanitize all user inputs before processing
+- Use environment variables for sensitive configuration
+

@@ -1,0 +1,67 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Backend Service
+
+## Responsibilities
+- Whisper integration for subtitle generation
+- OpenAI GPT integration for Q&A
+- Real-time communication via WebSockets
+- Session management
+- Dialogue context storage
+
+## Technology Stack
+- Node.js 18+ with Express.js
+- Socket.io for WebSocket management
+- Redis for session storage (in-memory for demo)
+- OpenAI SDK for Whisper and GPT-4
+
+## Dependencies
+- OpenAI API
+- Socket.io
+- Redis (optional for demo)
+
+## Public Interfaces
+- /api/session/create
+- /api/session/join
+- WebSocket Namespaces:
+  - /tv - TV app connections
+  - /mobile - Mobile app connections
+  - /subtitle - Subtitle streaming
+  - /voice - Voice command processing
+  - /ai - AI query handling
+
+## API Endpoints
+- POST /api/session/create - Create a new viewing session
+- GET /api/session/:id - Get session details
+- POST /api/whisper/transcribe - Process audio chunk
+- POST /api/gpt/query - Process AI query
+
+## WebSocket Events
+- connection - New client connected
+- disconnect - Client disconnected
+- subtitle:new - New subtitle available
+- command:voice - New voice command received
+- query:text - New text query received
+- response:ai - AI response ready
+
+## Data Structures
+- Session: {id, created, expires, subtitles[]}
+- Subtitle: {timestamp, text, speaker, confidence}
+- Query: {text, timestamp, context}
+- Response: {text, timestamp, sources[]}
+
+## Error Handling
+- HTTP status codes for REST errors
+- Socket event 'error' with details
+- Retry logic for AI API failures
+- Rate limiting for API abuse prevention
+
+## Performance Considerations
+- Audio chunk size optimization
+- Subtitle caching
+- AI response caching
+- Connection pooling
+- WebSocket heartbeat
