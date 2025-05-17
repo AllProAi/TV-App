@@ -204,17 +204,191 @@ For a production deployment, follow these steps:
    - Deploy to a Node.js hosting environment (AWS, Heroku, DigitalOcean, etc.)
    - Set environment variables for `PORT`, `NODE_ENV=production`, and `OPENAI_API_KEY`
    - Configure a production database for session storage (optional)
+   - Ensure your hosting service supports WebSocket connections
+   - Set up proper security headers and CORS configuration
+   - Consider using PM2 or similar process manager for reliability
+   - Example AWS deployment:
+     ```bash
+     # Install PM2 globally
+     npm install -g pm2
+     
+     # Build the backend
+     cd backend
+     pnpm run build
+     
+     # Start with PM2
+     pm2 start dist/index.js --name memorystream-backend
+     pm2 save
+     ```
 
 2. **TV App Deployment**:
-   - Build the app with the correct backend URL: `BACKEND_URL=https://your-backend-url pnpm run build`
+   - Build the app with the correct backend URL:
+     ```bash
+     cd tv-app
+     BACKEND_URL=https://your-backend-url pnpm run build
+     ```
    - Deploy the contents of the `tv-app/dist` directory to a static web server or CDN
    - For Senza platform deployment, follow their specific deployment guidelines
+   - Configure proper caching headers for static assets:
+     - Long cache time for versioned assets (JS/CSS with hashes)
+     - Short cache time for HTML and configuration files
+   - Example Nginx configuration:
+     ```nginx
+     server {
+         listen 80;
+         server_name tv.memorystream.example.com;
+         
+         root /path/to/tv-app/dist;
+         index index.html;
+         
+         location / {
+             try_files $uri $uri/ /index.html;
+         }
+         
+         location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+             expires 30d;
+             add_header Cache-Control "public, max-age=2592000";
+         }
+     }
+     ```
 
 3. **Mobile App Deployment**:
-   - Build the app with the correct backend URL: `BACKEND_URL=https://your-backend-url pnpm run build`
+   - Build the app with the correct backend URL:
+     ```bash
+     cd mobile-app
+     BACKEND_URL=https://your-backend-url pnpm run build
+     ```
    - Deploy the contents of the `mobile-app/dist` directory to a static web server or CDN
    - Configure your server to support HTTPS (required for PWA and WebRTC features)
    - Set appropriate cache headers for service worker support
+   - Example deployment to Firebase Hosting:
+     ```bash
+     # Install Firebase CLI if not already installed
+     npm install -g firebase-tools
+     
+     # Login to Firebase
+     firebase login
+     
+     # Initialize Firebase in the project
+     cd mobile-app
+     firebase init hosting
+     
+     # Deploy to Firebase
+     firebase deploy --only hosting
+     ```
+   - Configure `firebase.json` for PWA support:
+     ```json
+     {
+       "hosting": {
+         "public": "dist",
+         "ignore": [
+           "firebase.json",
+           "**/.*",
+           "**/node_modules/**"
+         ],
+         "rewrites": [
+           {
+             "source": "**",
+             "destination": "/index.html"
+           }
+         ],
+         "headers": [
+           {
+             "source": "/service-worker.js",
+             "headers": [
+               {
+                 "key": "Cache-Control",
+                 "value": "no-cache"
+               }
+             ]
+           },
+           {
+             "source": "**/*.@(js|css)",
+             "headers": [
+               {
+                 "key": "Cache-Control",
+                 "value": "max-age=31536000"
+               }
+             ]
+           }
+         ]
+       }
+     }
+     ```
+
+4. **Monitoring and Scaling**:
+   - Set up monitoring for backend server health and performance
+   - Configure alerts for API quota limits and errors
+   - For high traffic scenarios, consider:
+     - Horizontal scaling of backend servers with load balancing
+     - Redis for session state sharing between instances
+     - CDN caching for static assets
+     - Rate limiting for API endpoints
+     - WebSocket connection pooling
+
+## Production Performance Considerations
+
+When deploying MemoryStream to production environments, consider these performance optimizations:
+
+### Backend Optimizations
+1. **API Cost Management**:
+   - Implement intelligent batching for Whisper API requests
+   - Cache common AI responses for similar queries
+   - Use a lower-cost model for initial processing, escalating to GPT-4 only when needed
+   - Set up usage monitoring and alerting for OpenAI API costs
+
+2. **Memory Management**:
+   - Implement session cleanup for inactive sessions
+   - Use a database like MongoDB for subtitle storage instead of in-memory
+   - Stream large audio/video files instead of loading entire files in memory
+   - Configure Node.js with appropriate memory limits for your hosting environment
+
+3. **WebSocket Efficiency**:
+   - Implement heartbeats to maintain connection stability
+   - Add automatic reconnection with exponential backoff
+   - Consider Socket.io adapter for Redis in multi-instance deployments
+   - Optimize message payload sizes
+
+### TV App Optimizations
+1. **Video Playback**:
+   - Optimize adaptive bitrate streaming settings
+   - Implement proper buffer management
+   - Consider using requestIdleCallback for non-critical operations
+   - Optimize subtitle rendering for low-powered devices
+
+2. **Resource Loading**:
+   - Implement lazy loading for components
+   - Use code splitting to reduce initial bundle size
+   - Optimize asset loading order (critical CSS inline)
+   - Implement proper caching strategies
+
+### Mobile App Optimizations
+1. **PWA Performance**:
+   - Optimize service worker caching strategies
+   - Preload critical resources
+   - Minimize JavaScript bundle size
+   - Implement performance monitoring with Web Vitals
+
+2. **Battery Efficiency**:
+   - Reduce microphone polling frequency when inactive
+   - Optimize WebSocket connection management
+   - Implement power-aware features (reduce animations on low battery)
+   - Use passive event listeners where appropriate
+
+3. **Data Usage**:
+   - Compress WebSocket communications
+   - Implement offline capabilities for frequently used features
+   - Cache responses when appropriate
+   - Add data usage settings for users on limited data plans
+
+### Testing Under Load
+Before full production release, perform load testing focusing on:
+- Concurrent WebSocket connections (aim for 1000+ simultaneous users)
+- Backend request handling under heavy load
+- AI service throughput and response times
+- Memory usage patterns during extended operation
+
+Use tools like Artillery.io, k6, or custom Socket.io testing scripts to simulate real-world usage patterns.
 
 ## Development Rules
 

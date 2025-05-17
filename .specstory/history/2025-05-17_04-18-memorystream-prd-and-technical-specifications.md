@@ -4587,8 +4587,6 @@ Cannot edit files blocked by globalIgnore
 
 
 
-
-
 ---
 
 _**User**_
@@ -8063,6 +8061,5352 @@ Implement fallback responses and manual subtitle options for all AI features.
 ---
 
 *This PRD and ADR document serves as the comprehensive guide for the MemoryStream development team. All technical decisions should reference these documents, and any changes should be documented through additional ADRs.*
+
+---
+
+_**Assistant**_
+
+
+
+---
+
+I'll continue development on the MemoryStream project based on the PRD and existing architecture. Let me first check the current repository structure to understand what we have and what needs to be implemented.
+
+---
+
+<details>
+            <summary>Listed current directory • **9** results</summary>
+        
+| Name |
+|-------|
+| 📁 `.git` |
+| 📁 `docs` |
+| 📁 `mobile-app` |
+| 📁 `tv-app` |
+| 📄 `README.md` |
+| 📁 `backend` |
+| 📁 `.cursor` |
+| 📄 `.cursorindexingignore` |
+| 📁 `.specstory` |
+
+</details>
+
+---
+
+Let's check the structure of our three main components: the TV app, mobile app, and backend server.
+
+---
+
+<details>
+            <summary>Listed directory tv-app • **4** results</summary>
+        
+| Name |
+|-------|
+| 📄 `webpack.config.js` |
+| 📁 `src` |
+| 📁 `public` |
+| 📄 `package.json` |
+
+</details>
+
+---
+
+<details>
+            <summary>Listed directory mobile-app • **4** results</summary>
+        
+| Name |
+|-------|
+| 📁 `public` |
+| 📁 `src` |
+| 📄 `webpack.config.js` |
+| 📄 `package.json` |
+
+</details>
+
+---
+
+<details>
+            <summary>Listed directory backend • **2** results</summary>
+        
+| Name |
+|-------|
+| 📁 `src` |
+| 📄 `package.json` |
+
+</details>
+
+---
+
+Let's examine the source files in each component to understand what's already implemented.
+
+---
+
+<details>
+            <summary>Listed directory tv-app/src • **3** results</summary>
+        
+| Name |
+|-------|
+| 📁 `styles` |
+| 📁 `components` |
+| 📄 `index.js` |
+
+</details>
+
+---
+
+<details>
+            <summary>Listed directory tv-app/src/components • **5** results</summary>
+        
+| Name |
+|-------|
+| 📄 `AIAssistant.js` |
+| 📄 `ConnectionManager.js` |
+| 📄 `RemoteNavigation.js` |
+| 📄 `SubtitleManager.js` |
+| 📄 `VideoPlayer.js` |
+
+</details>
+
+---
+
+<details>
+            <summary>Listed directory mobile-app/src • **3** results</summary>
+        
+| Name |
+|-------|
+| 📁 `components` |
+| 📁 `styles` |
+| 📄 `index.js` |
+
+</details>
+
+---
+
+<details>
+            <summary>Listed directory mobile-app/src/components • **1** results</summary>
+        
+| Name |
+|-------|
+| 📄 `QRCodeScanner.js` |
+
+</details>
+
+---
+
+<details>
+            <summary>Listed directory backend/src • **2** results</summary>
+        
+| Name |
+|-------|
+| 📁 `services` |
+| 📄 `index.js` |
+
+</details>
+
+---
+
+<details>
+            <summary>Listed directory backend/src/services • **3** results</summary>
+        
+| Name |
+|-------|
+| 📄 `sessionService.js` |
+| 📄 `gptService.js` |
+| 📄 `whisperService.js` |
+
+</details>
+
+---
+
+Let's check the package.json files to understand dependencies and configurations:
+
+---
+
+Read file: tv-app/package.json
+
+---
+
+Read file: mobile-app/package.json
+
+---
+
+Read file: backend/package.json
+
+---
+
+Let's examine the main index.js files to understand how the applications are structured:
+
+---
+
+Read file: backend/src/index.js
+
+---
+
+Let's also check one of the service files:
+
+---
+
+Read file: backend/src/services/whisperService.js
+
+---
+
+Read file: tv-app/src/components/VideoPlayer.js
+
+---
+
+Now that I have a better understanding of the project structure, let's continue development by implementing the missing components and improving the existing ones. Based on the PRD and the current state of the project, I'll focus on implementing:
+
+1. OpenAI integration for Whisper (subtitle generation)
+2. Content Q&A functionality with GPT
+3. Voice command processing
+4. Timestamp-based content search
+
+Let's start with completing the Whisper integration for real-time subtitle generation.
+
+---
+
+```diff
+  const { OpenAI } = require('openai');
++ const fs = require('fs');
++ const path = require('path');
++ const os = require('os');
+  
+  // Initialize OpenAI client
+```
+
+```diff
+  async function transcribe(audioData, options = {}) {
+    try {
+-     // For demo purposes, create a temporary file from the audio data
+-     // In production, handle this more efficiently
+-     const tempFilePath = `/tmp/audio-${Date.now()}.wav`;
++     // Create temporary file name
++     const tempDir = os.tmpdir();
++     const tempFilePath = path.join(tempDir, `audio-${Date.now()}.webm`);
+      
+-     // Convert audioData to format Whisper accepts
+-     // This is simplified for the demo - actual implementation would depend on
+-     // how audio is being captured and streamed from the client
++     // Convert audioData to a file
++     let fileBuffer;
++     if (typeof audioData === 'string') {
++       // Handle base64 string
++       if (audioData.startsWith('data:audio')) {
++         // Extract base64 data from data URL
++         const base64Data = audioData.split(',')[1];
++         fileBuffer = Buffer.from(base64Data, 'base64');
++       } else {
++         // Assume it's already base64
++         fileBuffer = Buffer.from(audioData, 'base64');
++       }
++     } else if (Buffer.isBuffer(audioData)) {
++       // Already a buffer
++       fileBuffer = audioData;
++     } else {
++       throw new Error('Invalid audio data format. Expected Buffer or base64 string.');
++     }
++     
++     // Write buffer to temp file
++     fs.writeFileSync(tempFilePath, fileBuffer);
+      
+      // Call Whisper API
+      const transcription = await openai.audio.transcriptions.create({
+-       file: tempFilePath, // In real implementation, handle file creation properly
++       file: fs.createReadStream(tempFilePath),
+        model: "whisper-1",
+        language: options.language || "en",
+        temperature: options.temperature || 0,
+        response_format: "verbose_json"
+      });
++     
++     // Delete temp file
++     try {
++       fs.unlinkSync(tempFilePath);
++     } catch (err) {
++       console.warn(`Failed to delete temp file ${tempFilePath}:`, err);
++     }
+      
+      // Parse and format the result
+      return {
+        timestamp: Date.now(),
+        text: transcription.text,
+-       segments: transcription.segments.map(segment => ({
++       segments: transcription.segments?.map(segment => ({
+          start: segment.start,
+          end: segment.end,
+          text: segment.text,
+          confidence: segment.confidence
+-       })),
++       })) || [],
+        language: transcription.language,
+-       confidence: calculateAverageConfidence(transcription.segments)
++       confidence: calculateAverageConfidence(transcription.segments || [])
+      };
+    } catch (error) {
+```
+
+```diff
+    }
+  }
++ 
++ /**
++  * Process audio chunks for real-time transcription
++  * @param {Buffer|string} audioChunk - Audio chunk data
++  * @param {string} sessionId - Session identifier for tracking context
++  * @param {Object} options - Transcription options
++  * @returns {Promise<Object>} - Transcription result
++  */
++ async function transcribeRealtime(audioChunk, sessionId, options = {}) {
++   // This is a simplified version for the demo
++   // In a production system, we would:
++   // 1. Buffer audio chunks until we have enough for meaningful transcription
++   // 2. Maintain session context for continuity between chunks
++   // 3. Handle overlapping transcriptions for smoother experience
++   
++   return transcribe(audioChunk, options);
++ }
+  
+  /**
+```
+
+```diff
+    if (!segments || segments.length === 0) return 0;
+    
+-   const sum = segments.reduce((total, segment) => total + segment.confidence, 0);
++   const sum = segments.reduce((total, segment) => total + (segment.confidence || 0), 0);
+    return sum / segments.length;
+  }
+```
+
+```diff
+  module.exports = {
+    transcribe,
++   transcribeRealtime,
+    identifySpeakers
+  }; 
+```
+
+---
+
+Now, let's update the GPT service to handle content Q&A functionality:
+
+---
+
+Read file: backend/src/services/gptService.js
+
+---
+
+Let's update the GPT service to enhance it with timestamp-based search functionality:
+
+---
+
+```diff
+  async function generateResponse(query, subtitles = [], options = {}) {
+    try {
++     // Find relevant subtitles based on query
++     const relevantSubtitles = options.timestamp 
++       ? getSubtitlesAroundTimestamp(subtitles, options.timestamp, options.contextWindow || 60)
++       : findRelevantSubtitles(query, subtitles, options.maxContext || 20);
++     
+      // Format subtitles as context
+-     const subtitleContext = subtitles
+-       .map(s => `[${formatTimestamp(s.timestamp)}] ${s.text}`)
++     const subtitleContext = relevantSubtitles
++       .map(s => `[${formatTimestamp(s.timestamp || s.start * 1000)}] ${s.text}`)
+        .join('\n');
+      
+      // Create system prompt with instructions
+-     const systemPrompt = `You are MemoryStream AI, an assistant that answers questions about TV content based on subtitles. 
+- You have access to the following subtitle text from the content the user is watching:
++     const systemPrompt = `You are MemoryStream AI, an assistant that answers questions about TV content based on dialogue. 
++ You have access to the following transcript from the content the user is watching:
+  
+  ${subtitleContext}
+  
+  When answering:
+- 1. Only use information from the provided subtitles
+- 2. If the answer isn't in the subtitles, say "I don't have enough information from what I've seen so far"
++ 1. Only use information from the provided transcript
++ 2. If the answer isn't in the transcript, say "I don't have enough information from what I've seen so far"
+  3. Reference specific timestamps when possible
+  4. Keep responses concise and informative
+- 5. Don't mention that you're working with "subtitles" - refer to it as "what I've seen" or "what was said"`;
++ 5. Don't mention that you're working with "subtitles" or "transcript" - refer to it as "what I've seen" or "what was said"`;
+  
+      // Call GPT
+```
+
+```diff
+        timestamp: Date.now(),
+        text: completion.choices[0].message.content,
+-       sources: identifySourceSubtitles(completion.choices[0].message.content, subtitles)
++       sources: relevantSubtitles.map(s => ({
++         timestamp: s.timestamp || s.start * 1000,
++         text: s.text
++       }))
+      };
+    } catch (error) {
+```
+
+```diff
+  Response must be a valid JSON object with the following structure:
+  {
+-   "action": "play|pause|rewind|forward|volume_up|volume_down|search|answer|none",
+-   "parameters": {}, // Additional parameters if needed
++   "action": "play|pause|rewind|forward|volume_up|volume_down|mute|search|answer|subtitle_on|subtitle_off|none",
++   "parameters": {}, // Additional parameters if needed (e.g. {"seconds": 30} for forward/rewind)
+    "confidence": 0.95, // How confident you are that this is the correct action
+    "clarification": "" // If confidence is low, suggest clarification
+- }`;
++ }
++ 
++ For search commands, include a "query" parameter with the search term.
++ For example: {"action": "search", "parameters": {"query": "who is the murderer"}}`;
+  
+      // Call GPT to interpret the command
+```
+
+```diff
+      // Format subtitles as context
+      const subtitleContext = subtitles
+-       .map(s => `[${formatTimestamp(s.timestamp)}] ${s.text}`)
++       .map(s => `[${formatTimestamp(s.timestamp || s.start * 1000)}] ${s.text}`)
+        .join('\n');
+      
+      // Create system prompt with instructions
+      const systemPrompt = `You are a content summarization expert.
+- Based on the following subtitles from a TV show or movie, generate a concise summary.
++ Based on the following transcript from a TV show or movie, generate a concise summary.
+  Focus on key plot points, main characters, and significant events.
+  The summary should be approximately ${options.length || 3} paragraphs.
+  
+- SUBTITLES:
++ TRANSCRIPT:
+  ${subtitleContext}`;
+  
+```
+
+```diff
+    }
+  }
++ 
++ /**
++  * Search subtitles for a specific query
++  * @param {string} query - Search query
++  * @param {Array} subtitles - Array of subtitle objects
++  * @returns {Promise<Object>} - Search results
++  */
++ async function searchSubtitles(query, subtitles) {
++   try {
++     // First find potentially relevant subtitles using simple keyword matching
++     const potentialMatches = findRelevantSubtitles(query, subtitles, 30);
++     
++     if (potentialMatches.length === 0) {
++       return {
++         timestamp: Date.now(),
++         results: [],
++         query
++       };
++     }
++     
++     // Format subtitle context for semantic search
++     const subtitleContext = potentialMatches
++       .map(s => `[${formatTimestamp(s.timestamp || s.start * 1000)}] ${s.text}`)
++       .join('\n');
++     
++     // Create system prompt for semantic search
++     const systemPrompt = `You are a semantic search engine for TV content.
++ Based on the user's query and the following transcript excerpts, identify the most relevant moments.
++ Return a JSON array of objects containing:
++ 1. The timestamp string [MM:SS]
++ 2. The text of the transcript
++ 3. A relevance score (0-1) indicating how relevant this moment is to the query
++ 
++ Return only the timestamp sections that are truly relevant to the query. If none are relevant, return an empty array.`;
++ 
++     // Call GPT for semantic search
++     const completion = await openai.chat.completions.create({
++       model: "gpt-4",
++       messages: [
++         { role: "system", content: systemPrompt },
++         { role: "user", content: `Query: "${query}"\n\nTranscript excerpts:\n${subtitleContext}` }
++       ],
++       temperature: 0.1,
++       max_tokens: 500,
++       response_format: { type: "json_object" }
++     });
++ 
++     // Parse results
++     const results = JSON.parse(completion.choices[0].message.content);
++     
++     return {
++       timestamp: Date.now(),
++       results: Array.isArray(results) ? results : (results.results || []),
++       query
++     };
++   } catch (error) {
++     console.error('Subtitle search error:', error);
++     
++     // Fallback to simple keyword search if GPT fails
++     const fallbackResults = findRelevantSubtitles(query, subtitles, 5)
++       .map(s => ({
++         timestamp: formatTimestamp(s.timestamp || s.start * 1000),
++         text: s.text,
++         relevance: 0.5
++       }));
++     
++     return {
++       timestamp: Date.now(),
++       results: fallbackResults,
++       query,
++       fallback: true
++     };
++   }
++ }
+  
+  /**
+```
+
+```diff
+    if (typeof timestamp !== 'number') return '00:00';
+    
+-   const date = new Date(timestamp);
+-   const minutes = date.getMinutes().toString().padStart(2, '0');
+-   const seconds = date.getSeconds().toString().padStart(2, '0');
++   const totalSeconds = Math.floor(timestamp / 1000);
++   const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
++   const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${minutes}:${seconds}`;
+  }
++ 
++ /**
++  * Get subtitles around a specific timestamp
++  * @param {Array} subtitles - Array of subtitle objects
++  * @param {number} timestamp - Timestamp in milliseconds
++  * @param {number} contextWindow - Context window in seconds (half before, half after)
++  * @returns {Array} - Subtitles within the context window
++  */
++ function getSubtitlesAroundTimestamp(subtitles, timestamp, contextWindow = 60) {
++   const halfWindowMs = (contextWindow / 2) * 1000;
++   const startTime = timestamp - halfWindowMs;
++   const endTime = timestamp + halfWindowMs;
++   
++   return subtitles.filter(subtitle => {
++     const subtitleTime = subtitle.timestamp || subtitle.start * 1000;
++     return subtitleTime >= startTime && subtitleTime <= endTime;
++   }).sort((a, b) => {
++     return (a.timestamp || a.start * 1000) - (b.timestamp || b.start * 1000);
++   });
++ }
++ 
++ /**
++  * Find subtitles relevant to a query using simple keyword matching
++  * @param {string} query - Search query
++  * @param {Array} subtitles - Array of subtitle objects
++  * @param {number} maxResults - Maximum number of results to return
++  * @returns {Array} - Relevant subtitles
++  */
++ function findRelevantSubtitles(query, subtitles, maxResults = 20) {
++   // Convert query to lowercase and split into tokens
++   const queryTokens = query.toLowerCase()
++     .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
++     .split(/\s+/)
++     .filter(token => token.length > 2);
++   
++   // Score each subtitle based on token matches
++   const scoredSubtitles = subtitles.map(subtitle => {
++     const text = subtitle.text.toLowerCase();
++     let score = 0;
++     
++     queryTokens.forEach(token => {
++       if (text.includes(token)) {
++         score += 1;
++       }
++     });
++     
++     return { ...subtitle, relevanceScore: score };
++   });
++   
++   // Sort by relevance score (descending) and take top results
++   return scoredSubtitles
++     .filter(s => s.relevanceScore > 0)
++     .sort((a, b) => b.relevanceScore - a.relevanceScore)
++     .slice(0, maxResults);
++ }
+  
+  /**
+```
+
+```diff
+    generateResponse,
+    processCommand,
+-   generateSummary
++   generateSummary,
++   searchSubtitles,
++   getSubtitlesAroundTimestamp,
++   findRelevantSubtitles
+  }; 
+```
+
+---
+
+Now, let's update the backend server to handle the new functionality:
+
+---
+
+```diff
+  // Configure middleware
+  app.use(cors());
+- app.use(express.json());
++ app.use(express.json({ limit: '50mb' }));
+  
+  // Socket.io setup with namespaces
+```
+
+```diff
+  // Session storage (in-memory for demo)
+  const sessions = {};
++ 
++ // Queue for subtitle processing to avoid overlapping requests
++ const subtitleQueue = {};
+  
+  // API Routes
+```
+
+```diff
+      
+      // Generate QR code for mobile pairing
+-     const pairingUrl = `${process.env.MOBILE_APP_URL || 'https://memorystream-mobile.example.com'}?session=${sessionId}`;
++     const pairingUrl = `${process.env.MOBILE_APP_URL || 'http://localhost:8081'}?session=${sessionId}`;
+      const qrCode = await QRCode.toDataURL(pairingUrl);
+      
+```
+
+```diff
+  app.post('/api/whisper/transcribe', async (req, res) => {
+    try {
+-     const { audioData, sessionId } = req.body;
++     const { audioData, sessionId, timestamp } = req.body;
+      
+      if (!audioData || !sessionId) {
+```
+
+```diff
+      }
+      
+-     // Process with Whisper (placeholder for demo)
+-     // In actual implementation, this would call whisperService.transcribe()
+-     const transcription = {
+-       timestamp: Date.now(),
+-       text: "This is a placeholder subtitle from Whisper API",
+-       confidence: 0.95
+-     };
++     // Process with Whisper
++     const transcription = await whisperService.transcribe(audioData);
++     
++     // Add timestamp if not provided
++     if (!timestamp && transcription) {
++       transcription.timestamp = Date.now();
++     } else if (timestamp) {
++       transcription.timestamp = timestamp;
++     }
+      
+      // Add to session subtitles
+      session.subtitles.push(transcription);
++     
++     // Maintain a reasonable history size
++     if (session.subtitles.length > 1000) {
++       session.subtitles = session.subtitles.slice(-1000);
++     }
+      
+      // Emit to subtitle namespace
+-     subtitleNamespace.emit('subtitle:new', {
++     subtitleNamespace.to(sessionId).emit('subtitle:new', {
+        sessionId,
+        subtitle: transcription
+```
+
+```diff
+      }
+      
+-     // Get relevant subtitles for context
+-     const relevantSubtitles = timestamp 
+-       ? session.subtitles.filter(s => Math.abs(s.timestamp - timestamp) < 30000) // Within 30 seconds
+-       : session.subtitles.slice(-10); // Last 10 subtitles
+-     
+-     // Process with GPT (placeholder for demo)
+-     // In actual implementation, this would call gptService.generateResponse()
+-     const response = {
+-       timestamp: Date.now(),
+-       text: `This is a placeholder response to: "${query}"`,
+-       sources: relevantSubtitles.map(s => ({ timestamp: s.timestamp, text: s.text }))
+-     };
++     // Process with GPT
++     const response = await gptService.generateResponse(query, session.subtitles, {
++       timestamp: timestamp,
++       contextWindow: 60 // seconds
++     });
+      
+      // Emit to AI namespace
+-     aiNamespace.emit('response:ai', {
++     aiNamespace.to(sessionId).emit('response:ai', {
+        sessionId,
+        response
+```
+
+```diff
+    }
+  });
++ 
++ // Search subtitles
++ app.post('/api/search/subtitles', async (req, res) => {
++   try {
++     const { query, sessionId } = req.body;
++     
++     if (!query || !sessionId) {
++       return res.status(400).json({ error: 'Missing required parameters' });
++     }
++     
++     const session = sessions[sessionId];
++     if (!session) {
++       return res.status(404).json({ error: 'Session not found' });
++     }
++     
++     // Search subtitles
++     const results = await gptService.searchSubtitles(query, session.subtitles);
++     
++     res.json({ success: true, ...results });
++   } catch (error) {
++     console.error('Subtitle search error:', error);
++     res.status(500).json({ error: 'Failed to search subtitles' });
++   }
++ });
++ 
++ // Generate content summary
++ app.post('/api/gpt/summary', async (req, res) => {
++   try {
++     const { sessionId } = req.body;
++     
++     if (!sessionId) {
++       return res.status(400).json({ error: 'Missing required parameters' });
++     }
++     
++     const session = sessions[sessionId];
++     if (!session) {
++       return res.status(404).json({ error: 'Session not found' });
++     }
++     
++     // Generate summary
++     const summary = await gptService.generateSummary(session.subtitles);
++     
++     res.json({ success: true, summary });
++   } catch (error) {
++     console.error('Summary generation error:', error);
++     res.status(500).json({ error: 'Failed to generate summary' });
++   }
++ });
+  
+  // Socket.io event handlers
+```
+
+```diff
+        sessions[sessionId].connected.tv = true;
+        console.log(`TV joined session: ${sessionId}`);
++       
++       // Send current session state
++       socket.emit('session:state', {
++         id: sessionId,
++         subtitleCount: sessions[sessionId].subtitles.length,
++         connectedMobileCount: sessions[sessionId].connected.mobile.length
++       });
++     } else {
++       socket.emit('error', { message: 'Invalid session ID' });
++     }
++   });
++   
++   socket.on('subtitle:request', async (data) => {
++     const { sessionId, audioData, timestamp } = data;
++     if (!sessions[sessionId]) {
++       socket.emit('error', { message: 'Invalid session ID' });
++       return;
++     }
++     
++     try {
++       // Check if we're already processing for this timestamp range
++       const currentTime = timestamp || Date.now();
++       const queueKey = `${sessionId}-${Math.floor(currentTime / 5000)}`; // Group by 5-second chunks
++       
++       if (subtitleQueue[queueKey]) {
++         // Already processing, skip
++         return;
++       }
++       
++       // Mark as processing
++       subtitleQueue[queueKey] = true;
++       
++       // Process with Whisper
++       const transcription = await whisperService.transcribe(audioData);
++       
++       // Add timestamp if not provided
++       if (!timestamp && transcription) {
++         transcription.timestamp = Date.now();
++       } else if (timestamp) {
++         transcription.timestamp = timestamp;
++       }
++       
++       // Add to session subtitles
++       sessions[sessionId].subtitles.push(transcription);
++       
++       // Maintain a reasonable history size
++       if (sessions[sessionId].subtitles.length > 1000) {
++         sessions[sessionId].subtitles = sessions[sessionId].subtitles.slice(-1000);
++       }
++       
++       // Emit to subtitle namespace
++       subtitleNamespace.to(sessionId).emit('subtitle:new', {
++         sessionId,
++         subtitle: transcription
++       });
++       
++       // Clear queue status
++       delete subtitleQueue[queueKey];
++     } catch (error) {
++       console.error('Socket subtitle request error:', error);
++       socket.emit('error', { message: 'Failed to process audio' });
++       
++       // Clear queue status even on error
++       if (timestamp) {
++         delete subtitleQueue[`${sessionId}-${Math.floor(timestamp / 5000)}`];
++       }
+      }
+    });
+```
+
+```diff
+  mobileNamespace.on('connection', (socket) => {
+    console.log('Mobile client connected:', socket.id);
++   let currentSessionId = null;
+    
+    socket.on('join:session', (data) => {
+      const { sessionId, deviceInfo } = data;
+      if (sessions[sessionId]) {
+        socket.join(sessionId);
++       currentSessionId = sessionId;
++       
+        const mobileClient = {
+          socketId: socket.id,
+```
+
+```diff
+          timestamp: Date.now()
+        });
+-     }
++       
++       // Send current session state
++       socket.emit('session:joined', {
++         id: sessionId,
++         tvConnected: sessions[sessionId].connected.tv,
++         subtitleCount: sessions[sessionId].subtitles.length
++       });
++     } else {
++       socket.emit('error', { message: 'Invalid session ID' });
++     }
+    });
+    
+-   socket.on('command:voice', (data) => {
+-     const { sessionId, command } = data;
+-     if (sessions[sessionId]) {
+-       // Forward command to TV
+-       tvNamespace.to(sessionId).emit('command:voice', command);
++   socket.on('command:voice', async (data) => {
++     if (!currentSessionId || !sessions[currentSessionId]) {
++       socket.emit('error', { message: 'Not connected to any session' });
++       return;
++     }
++     
++     try {
++       const { audio, text } = data;
++       
++       // If audio is provided, transcribe first
++       let commandText = text;
++       if (!text && audio) {
++         try {
++           const transcription = await whisperService.transcribe(audio);
++           commandText = transcription.text;
++         } catch (error) {
++           console.error('Voice command transcription error:', error);
++           socket.emit('error', { message: 'Failed to transcribe voice command' });
++           return;
++         }
++       }
++       
++       if (!commandText) {
++         socket.emit('error', { message: 'No command text available' });
++         return;
++       }
++       
++       // Process command
++       const command = await gptService.processCommand(commandText);
++       
++       // Emit command to TV
++       tvNamespace.to(currentSessionId).emit('command:voice', command);
++       
++       // Send response back to mobile
++       socket.emit('command:processed', command);
++     } catch (error) {
++       console.error('Voice command processing error:', error);
++       socket.emit('error', { message: 'Failed to process voice command' });
+      }
+    });
+    
+    socket.on('remote:control', (data) => {
+-     const { sessionId, action } = data;
+-     if (sessions[sessionId]) {
++     if (!currentSessionId || !sessions[currentSessionId]) {
++       socket.emit('error', { message: 'Not connected to any session' });
++       return;
++     }
++     
++     const { action } = data;
+      // Forward remote control action to TV
+-       tvNamespace.to(sessionId).emit('remote:control', action);
+-     }
++     tvNamespace.to(currentSessionId).emit('remote:control', action);
+    });
+    
+-   socket.on('query:text', (data) => {
+-     const { sessionId, query } = data;
+-     if (sessions[sessionId]) {
+-       // Process query with GPT (placeholder)
+-       // In production, this would call gptService.generateResponse()
+-       const response = {
+-         timestamp: Date.now(),
+-         text: `This is a placeholder response to: "${query.text}"`,
+-         sources: []
+-       };
++   socket.on('query:text', async (data) => {
++     if (!currentSessionId || !sessions[currentSessionId]) {
++       socket.emit('error', { message: 'Not connected to any session' });
++       return;
++     }
++     
++     try {
++       const { query } = data;
++       
++       // Process query with GPT
++       const response = await gptService.generateResponse(
++         query.text, 
++         sessions[currentSessionId].subtitles,
++         { timestamp: query.timestamp }
++       );
+        
+        // Send response back to mobile
+        socket.emit('response:ai', response);
+        
+        // Also send to TV if query display is enabled
+-       tvNamespace.to(sessionId).emit('query:received', {
++       tvNamespace.to(currentSessionId).emit('query:received', {
+          query,
+          response
+        });
++     } catch (error) {
++       console.error('Text query processing error:', error);
++       socket.emit('error', { message: 'Failed to process query' });
++     }
++   });
++   
++   socket.on('search:subtitles', async (data) => {
++     if (!currentSessionId || !sessions[currentSessionId]) {
++       socket.emit('error', { message: 'Not connected to any session' });
++       return;
++     }
++     
++     try {
++       const { query } = data;
++       
++       // Search subtitles
++       const results = await gptService.searchSubtitles(
++         query, 
++         sessions[currentSessionId].subtitles
++       );
++       
++       // Send results back to mobile
++       socket.emit('search:results', results);
++       
++       // Also send to TV
++       tvNamespace.to(currentSessionId).emit('search:results', results);
++     } catch (error) {
++       console.error('Subtitle search error:', error);
++       socket.emit('error', { message: 'Failed to search subtitles' });
+      }
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('Mobile client disconnected:', socket.id);
++     
+      // Update session connection status
+-     Object.values(sessions).forEach(session => {
++     if (currentSessionId && sessions[currentSessionId]) {
++       const session = sessions[currentSessionId];
+        const index = session.connected.mobile.findIndex(m => m.socketId === socket.id);
++       
+        if (index !== -1) {
+-         // Remove client or mark as disconnected
++         // Remove client
+          session.connected.mobile.splice(index, 1);
+          
+          // Notify TV that mobile client has disconnected
+-         tvNamespace.to(session.id).emit('mobile:disconnected', { 
++         tvNamespace.to(currentSessionId).emit('mobile:disconnected', { 
+            socketId: socket.id,
+            timestamp: Date.now()
+          });
+        }
+-     });
++     }
++   });
++ });
++ 
++ // Voice namespace for streaming audio
++ voiceNamespace.on('connection', (socket) => {
++   console.log('Voice client connected:', socket.id);
++   let currentSessionId = null;
++   
++   socket.on('join:session', (data) => {
++     const { sessionId } = data;
++     if (sessions[sessionId]) {
++       socket.join(sessionId);
++       currentSessionId = sessionId;
++       console.log(`Voice client joined session: ${sessionId}`);
++     }
++   });
++   
++   socket.on('voice:stream', async (data) => {
++     if (!currentSessionId) {
++       return;
++     }
++     
++     try {
++       // Handle real-time voice processing
++       const { audio, timestamp } = data;
++       
++       // Process with Whisper realtime
++       const result = await whisperService.transcribeRealtime(audio, currentSessionId);
++       
++       if (result && result.text) {
++         // Process as command if it looks like one
++         if (result.text.toLowerCase().includes('pause') ||
++             result.text.toLowerCase().includes('play') ||
++             result.text.toLowerCase().includes('volume') ||
++             result.text.toLowerCase().includes('forward') ||
++             result.text.toLowerCase().includes('rewind') ||
++             result.text.toLowerCase().includes('search for')) {
++           
++           // Process command
++           const command = await gptService.processCommand(result.text);
++           
++           if (command.confidence > 0.7) {
++             // Emit command to TV
++             tvNamespace.to(currentSessionId).emit('command:voice', command);
++             
++             // Send feedback to voice client
++             socket.emit('voice:command', command);
++           }
++         }
++         
++         // Send transcription to both TV and mobile
++         socket.emit('voice:transcription', result);
++         tvNamespace.to(currentSessionId).emit('voice:transcription', result);
++       }
++     } catch (error) {
++       console.error('Voice streaming error:', error);
++     }
++   });
++   
++   socket.on('disconnect', () => {
++     console.log('Voice client disconnected:', socket.id);
++   });
++ });
++ 
++ // Subtitle namespace for handling subtitle streams
++ subtitleNamespace.on('connection', (socket) => {
++   console.log('Subtitle client connected:', socket.id);
++   let currentSessionId = null;
++   
++   socket.on('join:session', (data) => {
++     const { sessionId } = data;
++     if (sessions[sessionId]) {
++       socket.join(sessionId);
++       currentSessionId = sessionId;
++       console.log(`Subtitle client joined session: ${sessionId}`);
++       
++       // Send the last 10 subtitles to catch up
++       if (sessions[sessionId].subtitles.length > 0) {
++         const recentSubtitles = sessions[sessionId].subtitles.slice(-10);
++         socket.emit('subtitle:history', {
++           sessionId,
++           subtitles: recentSubtitles
++         });
++       }
++     }
++   });
++   
++   socket.on('subtitle:request', async (data) => {
++     if (!currentSessionId) {
++       return;
++     }
++     
++     // Get subtitles for a specific time range
++     const { startTime, endTime } = data;
++     
++     if (sessions[currentSessionId]) {
++       const filteredSubtitles = sessions[currentSessionId].subtitles.filter(s => {
++         return s.timestamp >= startTime && s.timestamp <= endTime;
++       });
++       
++       socket.emit('subtitle:range', {
++         sessionId: currentSessionId,
++         subtitles: filteredSubtitles,
++         startTime,
++         endTime
++       });
++     }
++   });
++   
++   socket.on('disconnect', () => {
++     console.log('Subtitle client disconnected:', socket.id);
++   });
++ });
++ 
++ // AI namespace for query/response handling
++ aiNamespace.on('connection', (socket) => {
++   console.log('AI client connected:', socket.id);
++   let currentSessionId = null;
++   
++   socket.on('join:session', (data) => {
++     const { sessionId } = data;
++     if (sessions[sessionId]) {
++       socket.join(sessionId);
++       currentSessionId = sessionId;
++       console.log(`AI client joined session: ${sessionId}`);
++     }
++   });
++   
++   socket.on('query:text', async (data) => {
++     if (!currentSessionId || !sessions[currentSessionId]) {
++       socket.emit('error', { message: 'Not connected to any session' });
++       return;
++     }
++     
++     try {
++       const { query, timestamp } = data;
++       
++       // Process query with GPT
++       const response = await gptService.generateResponse(
++         query, 
++         sessions[currentSessionId].subtitles,
++         { timestamp }
++       );
++       
++       // Send response back
++       socket.emit('response:ai', response);
++       
++       // Also broadcast to all clients in the AI namespace for this session
++       socket.to(currentSessionId).emit('response:ai', response);
++       
++       // And to the TV
++       tvNamespace.to(currentSessionId).emit('response:ai', response);
++     } catch (error) {
++       console.error('AI query error:', error);
++       socket.emit('error', { message: 'Failed to process query' });
++     }
++   });
++   
++   socket.on('disconnect', () => {
++     console.log('AI client disconnected:', socket.id);
+    });
+  });
+```
+
+---
+
+Now, let's update the session service with improved session management:
+
+---
+
+Read file: backend/src/services/sessionService.js
+
+---
+
+Let's update the session service to improve session management and context tracking:
+
+---
+
+```diff
+      expires: new Date(Date.now() + (options.duration || 24 * 60 * 60 * 1000)), // Default 24 hours
+      subtitles: [],
++     queries: [], // Track user queries and responses
++     contextMetadata: {}, // Content-specific metadata
++     videoState: {
++       currentTime: 0,
++       duration: 0,
++       playing: false,
++       lastUpdated: Date.now()
++     },
+      connected: {
+        tv: false,
+```
+
+```diff
+        subtitlesEnabled: true,
+        aiAssistantEnabled: true,
++       voiceCommandsEnabled: true,
++       subtitleLanguage: options.language || 'en',
++       showSubtitlesOnTV: true,
+        ...options.settings
+      },
+      content: options.content || {
+        title: "Demo Content",
+        source: "https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd",
+-       type: "application/dash+xml"
++       type: "application/dash+xml",
++       metadata: {}
+      }
+    };
+```
+
+```diff
+    
+    // Generate QR code for mobile pairing
+-   const baseUrl = process.env.MOBILE_APP_URL || 'https://memorystream-mobile.example.com';
++   const baseUrl = process.env.MOBILE_APP_URL || 'http://localhost:8081';
+    const pairingUrl = `${baseUrl}?session=${sessionId}`;
+    const qrCode = await QRCode.toDataURL(pairingUrl);
+```
+
+```diff
+      qrCode,
+      expires: session.expires,
+-     content: session.content
++     content: session.content,
++     settings: session.settings
+    };
+  }
+```
+
+```diff
+      };
+    }
++   
++   if (updates.videoState) {
++     session.videoState = {
++       ...session.videoState,
++       ...updates.videoState,
++       lastUpdated: Date.now()
++     };
++   }
++   
++   if (updates.contextMetadata) {
++     session.contextMetadata = {
++       ...session.contextMetadata,
++       ...updates.contextMetadata
++     };
++   }
+    
+    if (updates.expires) {
+```
+
+```diff
+    if (!session) return false;
+    
+-   session.subtitles.push({
++   // Ensure subtitle has required fields
++   const processedSubtitle = {
+      ...subtitle,
+-     timestamp: subtitle.timestamp || Date.now()
+-   });
++     timestamp: subtitle.timestamp || Date.now(),
++     videoTimestamp: subtitle.videoTimestamp || session.videoState.currentTime,
++     id: subtitle.id || `sub-${Date.now()}-${Math.floor(Math.random() * 1000)}`
++   };
++   
++   session.subtitles.push(processedSubtitle);
+    
+    // Optionally limit the number of stored subtitles to prevent memory bloat
+```
+
+```diff
+    return true;
+  }
++ 
++ /**
++  * Track user query and AI response
++  * @param {string} sessionId - Session ID
++  * @param {Object} interaction - Query and response data
++  * @returns {boolean} - Success status
++  */
++ function trackInteraction(sessionId, interaction) {
++   const session = sessions[sessionId];
++   
++   if (!session) return false;
++   
++   session.queries.push({
++     ...interaction,
++     timestamp: interaction.timestamp || Date.now(),
++     videoTimestamp: interaction.videoTimestamp || session.videoState.currentTime
++   });
++   
++   // Limit stored queries
++   if (session.queries.length > 100) {
++     session.queries = session.queries.slice(-100);
++   }
++   
++   return true;
++ }
++ 
++ /**
++  * Update video playback state
++  * @param {string} sessionId - Session ID
++  * @param {Object} state - Video state information
++  * @returns {boolean} - Success status
++  */
++ function updateVideoState(sessionId, state) {
++   const session = sessions[sessionId];
++   
++   if (!session) return false;
++   
++   session.videoState = {
++     ...session.videoState,
++     ...state,
++     lastUpdated: Date.now()
++   };
++   
++   return true;
++ }
+  
+  /**
+```
+
+```diff
+      );
+    }
++   
++   // Filter by video timestamp range
++   if (criteria.videoStartTime !== undefined && criteria.videoEndTime !== undefined) {
++     results = results.filter(subtitle => 
++       subtitle.videoTimestamp >= criteria.videoStartTime && 
++       subtitle.videoTimestamp <= criteria.videoEndTime
++     );
++   }
+    
+    // Filter by text search
+```
+
+```diff
+        return bRelevance - aRelevance; // Higher relevance first
+      });
++   } else if (criteria.sortBy === 'videoTimestamp') {
++     results.sort((a, b) => a.videoTimestamp - b.videoTimestamp);
+    } else {
+      // Default sort by timestamp
+```
+
+```diff
+    return results;
+  }
++ 
++ /**
++  * Get subtitles around a specific video timestamp
++  * @param {string} sessionId - Session ID
++  * @param {number} videoTimestamp - Video timestamp in seconds
++  * @param {number} windowSize - Window size in seconds (default: 60)
++  * @returns {Array} - Subtitles within the window
++  */
++ function getSubtitlesAroundVideoTime(sessionId, videoTimestamp, windowSize = 60) {
++   const session = sessions[sessionId];
++   
++   if (!session) return [];
++   
++   const halfWindow = windowSize / 2;
++   const startTime = Math.max(0, videoTimestamp - halfWindow);
++   const endTime = videoTimestamp + halfWindow;
++   
++   return session.subtitles
++     .filter(subtitle => 
++       subtitle.videoTimestamp >= startTime && 
++       subtitle.videoTimestamp <= endTime
++     )
++     .sort((a, b) => a.videoTimestamp - b.videoTimestamp);
++ }
+  
+  /**
+```
+
+```diff
+    if (clientType === 'tv') {
+      session.connected.tv = connectionInfo.connected !== false;
++     
++     // Update TV metadata if provided
++     if (connectionInfo.tvInfo) {
++       session.connected.tvInfo = {
++         ...session.connected.tvInfo || {},
++         ...connectionInfo.tvInfo,
++         lastUpdate: Date.now()
++       };
++     }
+    } else if (clientType === 'mobile') {
+      const { socketId, connected, deviceInfo } = connectionInfo;
+```
+
+```diff
+          existingClient.deviceInfo = deviceInfo || existingClient.deviceInfo;
+          existingClient.connected = true;
++         existingClient.lastSeen = Date.now();
+        } else {
+          session.connected.mobile.push({
+            socketId,
+            deviceInfo: deviceInfo || { type: 'unknown' },
+-           connected: true
++           connected: true,
++           lastSeen: Date.now()
+          });
+        }
+```
+
+```diff
+        expires: session.expires,
+        contentTitle: session.content?.title,
++       subtitleCount: session.subtitles.length,
+        connectedClients: {
+          tv: session.connected.tv ? 1 : 0,
+```
+
+```diff
+      }));
+  }
++ 
++ /**
++  * Extend session expiration time
++  * @param {string} sessionId - Session ID
++  * @param {number} durationMs - Additional time in milliseconds
++  * @returns {boolean} - Success status
++  */
++ function extendSession(sessionId, durationMs = 60 * 60 * 1000) { // Default: 1 hour
++   const session = sessions[sessionId];
++   
++   if (!session) return false;
++   
++   const currentExpiry = new Date(session.expires).getTime();
++   session.expires = new Date(currentExpiry + durationMs);
++   
++   return true;
++ }
+  
+  // Clean up expired sessions periodically
+```
+
+```diff
+    deleteSession,
+    addSubtitle,
++   trackInteraction,
++   updateVideoState,
+    searchSubtitles,
++   getSubtitlesAroundVideoTime,
+    updateConnectionStatus,
+    getActiveSessions,
++   extendSession,
+    // Expose sessions for direct access from index.js
+    getSessions: () => sessions
+```
+
+---
+
+Now, let's update the mobile app components to implement the mobile companion functionality. First, let's create the missing components:
+
+---
+
+```diff
+- 
++ /**
++  * Remote Control component for mobile app
++  * Provides D-pad and media buttons for TV navigation
++  */
++ class RemoteControl {
++   /**
++    * Initialize Remote Control
++    * @param {HTMLElement} container - Container element for the UI
++    * @param {Object} options - Configuration options
++    */
++   constructor(container, options = {}) {
++     this.container = container;
++     this.socket = options.socket;
++     this.session = options.session;
++     this.eventListeners = {};
++     
++     this.vibrationEnabled = 'vibrate' in navigator;
++     
++     this.render();
++     this.bindEvents();
++   }
++   
++   /**
++    * Render the remote control UI
++    */
++   render() {
++     this.container.innerHTML = `
++       <div class="remote-control">
++         <div class="remote-header">
++           <div class="remote-power-btn" data-action="power">
++             <i class="icon-power"></i>
++           </div>
++           <div class="remote-title">Remote</div>
++           <div class="remote-settings-btn" data-action="settings">
++             <i class="icon-settings"></i>
++           </div>
++         </div>
++         
++         <div class="remote-navigation">
++           <div class="dpad">
++             <button class="dpad-btn dpad-up" data-action="up">
++               <i class="icon-arrow-up"></i>
++             </button>
++             <button class="dpad-btn dpad-right" data-action="right">
++               <i class="icon-arrow-right"></i>
++             </button>
++             <button class="dpad-btn dpad-down" data-action="down">
++               <i class="icon-arrow-down"></i>
++             </button>
++             <button class="dpad-btn dpad-left" data-action="left">
++               <i class="icon-arrow-left"></i>
++             </button>
++             <button class="dpad-btn dpad-center" data-action="select">OK</button>
++           </div>
++         </div>
++         
++         <div class="remote-playback">
++           <button class="playback-btn" data-action="rewind">
++             <i class="icon-rewind"></i>
++           </button>
++           <button class="playback-btn play-pause-btn" data-action="playpause">
++             <i class="icon-play"></i>
++             <i class="icon-pause"></i>
++           </button>
++           <button class="playback-btn" data-action="forward">
++             <i class="icon-forward"></i>
++           </button>
++         </div>
++         
++         <div class="remote-volume">
++           <button class="volume-btn" data-action="volume_down">
++             <i class="icon-volume-down"></i>
++           </button>
++           <button class="volume-btn" data-action="mute">
++             <i class="icon-volume-mute"></i>
++           </button>
++           <button class="volume-btn" data-action="volume_up">
++             <i class="icon-volume-up"></i>
++           </button>
++         </div>
++         
++         <div class="remote-back-home">
++           <button class="nav-btn" data-action="back">
++             <i class="icon-back"></i>
++           </button>
++           <button class="nav-btn" data-action="home">
++             <i class="icon-home"></i>
++           </button>
++         </div>
++       </div>
++     `;
++     
++     // Create references to elements
++     this.elements = {
++       power: this.container.querySelector('[data-action="power"]'),
++       settings: this.container.querySelector('[data-action="settings"]'),
++       dpad: {
++         up: this.container.querySelector('[data-action="up"]'),
++         right: this.container.querySelector('[data-action="right"]'),
++         down: this.container.querySelector('[data-action="down"]'),
++         left: this.container.querySelector('[data-action="left"]'),
++         select: this.container.querySelector('[data-action="select"]')
++       },
++       playback: {
++         rewind: this.container.querySelector('[data-action="rewind"]'),
++         playpause: this.container.querySelector('[data-action="playpause"]'),
++         forward: this.container.querySelector('[data-action="forward"]')
++       },
++       volume: {
++         down: this.container.querySelector('[data-action="volume_down"]'),
++         mute: this.container.querySelector('[data-action="mute"]'),
++         up: this.container.querySelector('[data-action="volume_up"]')
++       },
++       navigation: {
++         back: this.container.querySelector('[data-action="back"]'),
++         home: this.container.querySelector('[data-action="home"]')
++       }
++     };
++   }
++   
++   /**
++    * Bind event listeners to UI elements
++    */
++   bindEvents() {
++     // Get all buttons with data-action attribute
++     const buttons = this.container.querySelectorAll('[data-action]');
++     
++     // Add click event to each button
++     buttons.forEach(button => {
++       const action = button.getAttribute('data-action');
++       
++       button.addEventListener('click', () => {
++         this.handleButtonPress(action);
++       });
++       
++       // Add touch feedback
++       button.addEventListener('touchstart', () => {
++         button.classList.add('active');
++       });
++       
++       button.addEventListener('touchend', () => {
++         button.classList.remove('active');
++       });
++     });
++   }
++   
++   /**
++    * Handle button press event
++    * @param {string} action - Button action
++    */
++   handleButtonPress(action) {
++     // Trigger haptic feedback if available
++     if (this.vibrationEnabled) {
++       navigator.vibrate(25);
++     }
++     
++     // Add visual feedback
++     this.triggerVisualFeedback(action);
++     
++     // Send remote control action to TV via WebSocket
++     if (this.socket && this.session) {
++       this.socket.emit('remote:control', {
++         action: {
++           type: action,
++           timestamp: Date.now()
++         }
++       });
++     }
++     
++     // Trigger event for other components
++     this.triggerEvent('action', { action });
++   }
++   
++   /**
++    * Add visual feedback for button press
++    * @param {string} action - Button action
++    */
++   triggerVisualFeedback(action) {
++     // Find the button element
++     let button;
++     
++     if (action === 'power') button = this.elements.power;
++     else if (action === 'settings') button = this.elements.settings;
++     else if (['up', 'right', 'down', 'left', 'select'].includes(action)) {
++       button = this.elements.dpad[action];
++     }
++     else if (['rewind', 'playpause', 'forward'].includes(action)) {
++       button = this.elements.playback[action];
++     }
++     else if (['volume_down', 'mute', 'volume_up'].includes(action)) {
++       button = this.elements.volume[action === 'volume_down' ? 'down' : action === 'volume_up' ? 'up' : 'mute'];
++     }
++     else if (['back', 'home'].includes(action)) {
++       button = this.elements.navigation[action];
++     }
++     
++     if (button) {
++       button.classList.add('pressed');
++       setTimeout(() => {
++         button.classList.remove('pressed');
++       }, 200);
++     }
++   }
++   
++   /**
++    * Add event listener
++    * @param {string} event - Event name
++    * @param {Function} callback - Event callback
++    */
++   on(event, callback) {
++     if (!this.eventListeners[event]) {
++       this.eventListeners[event] = [];
++     }
++     
++     this.eventListeners[event].push(callback);
++     return this;
++   }
++   
++   /**
++    * Remove event listener
++    * @param {string} event - Event name
++    * @param {Function} callback - Event callback
++    */
++   off(event, callback) {
++     if (!this.eventListeners[event]) return this;
++     
++     if (callback) {
++       this.eventListeners[event] = this.eventListeners[event].filter(cb => cb !== callback);
++     } else {
++       delete this.eventListeners[event];
++     }
++     
++     return this;
++   }
++   
++   /**
++    * Trigger event
++    * @param {string} event - Event name
++    * @param {*} data - Event data
++    */
++   triggerEvent(event, data) {
++     if (!this.eventListeners[event]) return;
++     
++     this.eventListeners[event].forEach(callback => {
++       try {
++         callback(data);
++       } catch (error) {
++         console.error(`Error in RemoteControl ${event} event handler:`, error);
++       }
++     });
++   }
++   
++   /**
++    * Update connection status UI
++    * @param {boolean} connected - Connection status
++    */
++   updateConnectionStatus(connected) {
++     if (connected) {
++       this.container.classList.remove('disconnected');
++     } else {
++       this.container.classList.add('disconnected');
++     }
++   }
++ }
++ 
++ export default RemoteControl; 
+```
+
+---
+
+Now, let's create the VoiceRecorder component:
+
+---
+
+```diff
+- 
++ /**
++  * Voice Recorder component for mobile app
++  * Captures and processes audio for voice commands
++  */
++ class VoiceRecorder {
++   /**
++    * Initialize Voice Recorder
++    * @param {HTMLElement} container - Container element for the UI
++    * @param {Object} options - Configuration options
++    */
++   constructor(container, options = {}) {
++     this.container = container;
++     this.socket = options.socket;
++     this.session = options.session;
++     this.eventListeners = {};
++     
++     this.isRecording = false;
++     this.isProcessing = false;
++     this.mediaRecorder = null;
++     this.audioChunks = [];
++     this.stream = null;
++     
++     this.render();
++     this.bindEvents();
++     this.initPermissionCheck();
++   }
++   
++   /**
++    * Render the voice recorder UI
++    */
++   render() {
++     this.container.innerHTML = `
++       <div class="voice-recorder">
++         <div class="voice-status">
++           <div class="voice-status-indicator"></div>
++           <span class="voice-status-text">Ready for voice commands</span>
++         </div>
++         
++         <button class="voice-button" id="voiceButton">
++           <div class="voice-button-icon">
++             <i class="icon-mic"></i>
++           </div>
++           <span class="voice-button-text">Hold to speak</span>
++         </button>
++         
++         <div class="voice-instructions">
++           <p>Try saying:</p>
++           <ul>
++             <li>"Pause the video"</li>
++             <li>"Skip forward 30 seconds"</li>
++             <li>"Turn on subtitles"</li>
++             <li>"What just happened?"</li>
++           </ul>
++         </div>
++         
++         <div class="voice-results">
++           <div class="voice-transcription"></div>
++           <div class="voice-response"></div>
++         </div>
++       </div>
++     `;
++     
++     // Cache DOM elements
++     this.elements = {
++       button: this.container.querySelector('.voice-button'),
++       statusIndicator: this.container.querySelector('.voice-status-indicator'),
++       statusText: this.container.querySelector('.voice-status-text'),
++       transcription: this.container.querySelector('.voice-transcription'),
++       response: this.container.querySelector('.voice-response')
++     };
++     
++     // Initial state
++     this.updateUIState('initial');
++   }
++   
++   /**
++    * Bind event listeners to UI elements
++    */
++   bindEvents() {
++     const button = this.elements.button;
++     
++     // Record while button is pressed
++     button.addEventListener('mousedown', this.startRecording.bind(this));
++     button.addEventListener('touchstart', this.startRecording.bind(this));
++     
++     // Stop when released
++     button.addEventListener('mouseup', this.stopRecording.bind(this));
++     button.addEventListener('touchend', this.stopRecording.bind(this));
++     
++     // Cancel on mouse/touch leave
++     button.addEventListener('mouseleave', this.cancelRecording.bind(this));
++     button.addEventListener('touchcancel', this.cancelRecording.bind(this));
++     
++     // Listen for socket events
++     if (this.socket) {
++       this.socket.on('command:processed', this.handleCommandResponse.bind(this));
++       this.socket.on('voice:transcription', this.handleTranscription.bind(this));
++     }
++   }
++   
++   /**
++    * Check microphone permissions
++    */
++   async initPermissionCheck() {
++     try {
++       // Check if browser supports getUserMedia
++       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
++         this.updateUIState('unsupported');
++         return;
++       }
++       
++       // Check if permission is already granted
++       const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
++       
++       if (permissionStatus.state === 'granted') {
++         this.updateUIState('ready');
++       } else if (permissionStatus.state === 'denied') {
++         this.updateUIState('denied');
++       } else {
++         this.updateUIState('prompt');
++       }
++       
++       // Listen for permission changes
++       permissionStatus.addEventListener('change', () => {
++         if (permissionStatus.state === 'granted') {
++           this.updateUIState('ready');
++         } else if (permissionStatus.state === 'denied') {
++           this.updateUIState('denied');
++         }
++       });
++     } catch (error) {
++       console.error('Permission check error:', error);
++       // If permissions API is not supported, we'll find out when trying to record
++       this.updateUIState('prompt');
++     }
++   }
++   
++   /**
++    * Start recording audio
++    */
++   async startRecording(event) {
++     event.preventDefault();
++     
++     if (this.isRecording || this.isProcessing) return;
++     
++     try {
++       // Get microphone access
++       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
++       
++       // Create media recorder
++       this.mediaRecorder = new MediaRecorder(this.stream);
++       this.audioChunks = [];
++       
++       // Listen for data available event
++       this.mediaRecorder.addEventListener('dataavailable', (event) => {
++         if (event.data.size > 0) {
++           this.audioChunks.push(event.data);
++         }
++       });
++       
++       // Start recording
++       this.mediaRecorder.start();
++       this.isRecording = true;
++       
++       // Update UI
++       this.updateUIState('recording');
++       
++       // Auto-stop after 10 seconds
++       this.recordingTimeout = setTimeout(() => {
++         if (this.isRecording) {
++           this.stopRecording();
++         }
++       }, 10000);
++       
++       this.triggerEvent('recordingStarted');
++     } catch (error) {
++       console.error('Recording error:', error);
++       
++       if (error.name === 'NotAllowedError') {
++         this.updateUIState('denied');
++       } else {
++         this.updateUIState('error');
++       }
++     }
++   }
++   
++   /**
++    * Stop recording and process audio
++    */
++   async stopRecording(event) {
++     if (event) event.preventDefault();
++     if (!this.isRecording) return;
++     
++     clearTimeout(this.recordingTimeout);
++     
++     try {
++       // Stop recording
++       this.mediaRecorder.stop();
++       this.isRecording = false;
++       this.isProcessing = true;
++       
++       // Update UI
++       this.updateUIState('processing');
++       
++       // Wait for mediaRecorder to finish
++       await new Promise(resolve => {
++         this.mediaRecorder.addEventListener('stop', resolve, { once: true });
++       });
++       
++       // Create blob from audio chunks
++       const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
++       
++       // Convert to base64 for transmission
++       const reader = new FileReader();
++       reader.readAsDataURL(audioBlob);
++       
++       reader.onloadend = () => {
++         const base64data = reader.result;
++         
++         // Send to server
++         if (this.socket && this.session) {
++           this.socket.emit('command:voice', {
++             audio: base64data,
++             timestamp: Date.now()
++           });
++         }
++         
++         this.triggerEvent('recordingComplete', { audioBlob, base64data });
++       };
++     } catch (error) {
++       console.error('Stop recording error:', error);
++       this.updateUIState('error');
++     } finally {
++       // Stop microphone access
++       if (this.stream) {
++         this.stream.getTracks().forEach(track => track.stop());
++         this.stream = null;
++       }
++     }
++   }
++   
++   /**
++    * Cancel recording without processing
++    */
++   cancelRecording(event) {
++     if (event) event.preventDefault();
++     if (!this.isRecording) return;
++     
++     clearTimeout(this.recordingTimeout);
++     
++     // Stop recording
++     this.mediaRecorder.stop();
++     this.isRecording = false;
++     
++     // Update UI
++     this.updateUIState('ready');
++     
++     // Stop microphone access
++     if (this.stream) {
++       this.stream.getTracks().forEach(track => track.stop());
++       this.stream = null;
++     }
++     
++     this.triggerEvent('recordingCancelled');
++   }
++   
++   /**
++    * Handle command processing response
++    * @param {Object} response - Command processing result
++    */
++   handleCommandResponse(response) {
++     this.isProcessing = false;
++     
++     // Update UI
++     if (response.confidence > 0.7) {
++       this.updateUIState('success');
++     } else {
++       this.updateUIState('unclear');
++     }
++     
++     // Display response
++     this.elements.response.textContent = response.action === 'none'
++       ? `I couldn't understand that command. ${response.clarification || ''}`
++       : `Command: ${response.action}`;
++     
++     // Reset to ready state after a delay
++     setTimeout(() => {
++       this.updateUIState('ready');
++       this.elements.response.textContent = '';
++     }, 3000);
++     
++     this.triggerEvent('commandProcessed', response);
++   }
++   
++   /**
++    * Handle transcription result
++    * @param {Object} result - Transcription result
++    */
++   handleTranscription(result) {
++     // Display transcription
++     this.elements.transcription.textContent = result.text;
++     
++     // Clear after delay
++     setTimeout(() => {
++       this.elements.transcription.textContent = '';
++     }, 5000);
++     
++     this.triggerEvent('transcriptionReceived', result);
++   }
++   
++   /**
++    * Update UI based on current state
++    * @param {string} state - Current state
++    */
++   updateUIState(state) {
++     const { statusIndicator, statusText, button } = this.elements;
++     
++     // Remove all state classes
++     this.container.classList.remove('state-initial', 'state-ready', 'state-recording', 
++       'state-processing', 'state-success', 'state-unclear', 'state-error', 
++       'state-denied', 'state-unsupported', 'state-prompt');
++     
++     // Add current state class
++     this.container.classList.add(`state-${state}`);
++     
++     // Update status text
++     switch (state) {
++       case 'initial':
++         statusText.textContent = 'Checking microphone access...';
++         button.disabled = true;
++         break;
++         
++       case 'ready':
++         statusText.textContent = 'Ready for voice commands';
++         button.disabled = false;
++         break;
++         
++       case 'recording':
++         statusText.textContent = 'Listening...';
++         break;
++         
++       case 'processing':
++         statusText.textContent = 'Processing voice command...';
++         button.disabled = true;
++         break;
++         
++       case 'success':
++         statusText.textContent = 'Command recognized!';
++         button.disabled = false;
++         break;
++         
++       case 'unclear':
++         statusText.textContent = 'Command unclear. Please try again.';
++         button.disabled = false;
++         break;
++         
++       case 'error':
++         statusText.textContent = 'Error processing voice. Please try again.';
++         button.disabled = false;
++         break;
++         
++       case 'denied':
++         statusText.textContent = 'Microphone access denied. Please enable in browser settings.';
++         button.disabled = true;
++         break;
++         
++       case 'unsupported':
++         statusText.textContent = 'Voice commands not supported in this browser.';
++         button.disabled = true;
++         break;
++         
++       case 'prompt':
++         statusText.textContent = 'Click button to enable microphone';
++         button.disabled = false;
++         break;
++     }
++   }
++   
++   /**
++    * Add event listener
++    * @param {string} event - Event name
++    * @param {Function} callback - Event callback
++    */
++   on(event, callback) {
++     if (!this.eventListeners[event]) {
++       this.eventListeners[event] = [];
++     }
++     
++     this.eventListeners[event].push(callback);
++     return this;
++   }
++   
++   /**
++    * Remove event listener
++    * @param {string} event - Event name
++    * @param {Function} callback - Event callback
++    */
++   off(event, callback) {
++     if (!this.eventListeners[event]) return this;
++     
++     if (callback) {
++       this.eventListeners[event] = this.eventListeners[event].filter(cb => cb !== callback);
++     } else {
++       delete this.eventListeners[event];
++     }
++     
++     return this;
++   }
++   
++   /**
++    * Trigger event
++    * @param {string} event - Event name
++    * @param {*} data - Event data
++    */
++   triggerEvent(event, data) {
++     if (!this.eventListeners[event]) return;
++     
++     this.eventListeners[event].forEach(callback => {
++       try {
++         callback(data);
++       } catch (error) {
++         console.error(`Error in VoiceRecorder ${event} event handler:`, error);
++       }
++     });
++   }
++   
++   /**
++    * Update connection status UI
++    * @param {boolean} connected - Connection status
++    */
++   updateConnectionStatus(connected) {
++     if (connected) {
++       this.container.classList.remove('disconnected');
++     } else {
++       this.container.classList.add('disconnected');
++     }
++   }
++ }
++ 
++ export default VoiceRecorder; 
+```
+
+---
+
+Let's create the ChatInterface component:
+
+---
+
+```diff
+- 
++  
+```
+
+---
+
+Let me try the edit again with a different function to make sure it gets created properly:
+
+---
+
+Model provided invalid arguments to terminal tool.
+
+---
+
+Let's try a different approach by creating the file directly using the edit_file tool:
+
+---
+
+```diff
+-  
++ /**
++  * Chat Interface component for mobile app
++  * Enables content-related Q&A with AI assistant
++  */
++ class ChatInterface {
++   /**
++    * Initialize Chat Interface
++    * @param {HTMLElement} container - Container element for the UI
++    * @param {Object} options - Configuration options
++    */
++   constructor(container, options = {}) {
++     this.container = container;
++     this.socket = options.socket;
++     this.session = options.session;
++     this.eventListeners = {};
++     
++     this.messages = [];
++     this.isTyping = false;
++     
++     this.render();
++     this.bindEvents();
++     
++     // Add some sample suggestions
++     this.addSuggestions([
++       "Who is that character?",
++       "What just happened?",
++       "Why did they do that?",
++       "Explain the plot so far"
++     ]);
++   }
++   
++   /**
++    * Render the chat interface UI
++    */
++   render() {
++     this.container.innerHTML = `
++       <div class="chat-interface">
++         <div class="chat-header">
++           <div class="chat-title">Content Assistant</div>
++           <div class="chat-status">
++             <span class="status-indicator"></span>
++             <span class="status-text">Ready</span>
++           </div>
++         </div>
++         
++         <div class="chat-messages" id="chatMessages"></div>
++         
++         <div class="chat-suggestions" id="chatSuggestions"></div>
++         
++         <div class="chat-input">
++           <input type="text" id="chatInput" placeholder="Ask about the content..." autocomplete="off">
++           <button class="chat-send-btn" id="chatSendBtn">
++             <i class="icon-send"></i>
++           </button>
++         </div>
++       </div>
++     `;
++     
++     // Cache DOM elements
++     this.elements = {
++       messages: this.container.querySelector('#chatMessages'),
++       input: this.container.querySelector('#chatInput'),
++       sendButton: this.container.querySelector('#chatSendBtn'),
++       suggestions: this.container.querySelector('#chatSuggestions'),
++       statusIndicator: this.container.querySelector('.status-indicator'),
++       statusText: this.container.querySelector('.status-text')
++     };
++   }
++   
++   /**
++    * Bind event listeners to UI elements
++    */
++   bindEvents() {
++     // Send message on button click
++     this.elements.sendButton.addEventListener('click', () => {
++       this.sendMessage();
++     });
++     
++     // Send message on Enter key
++     this.elements.input.addEventListener('keypress', (e) => {
++       if (e.key === 'Enter') {
++         e.preventDefault();
++         this.sendMessage();
++       }
++     });
++     
++     // Show/hide suggestions based on input focus
++     this.elements.input.addEventListener('focus', () => {
++       this.elements.suggestions.classList.add('active');
++     });
++     
++     this.elements.input.addEventListener('blur', () => {
++       // Short delay to allow clicking on suggestions
++       setTimeout(() => {
++         this.elements.suggestions.classList.remove('active');
++       }, 200);
++     });
++     
++     // Input typing indicator
++     this.elements.input.addEventListener('input', () => {
++       if (this.elements.input.value.length > 0) {
++         this.elements.input.classList.add('has-text');
++       } else {
++         this.elements.input.classList.remove('has-text');
++       }
++     });
++     
++     // Listen for socket events
++     if (this.socket) {
++       this.socket.on('response:ai', this.handleAIResponse.bind(this));
++       this.socket.on('search:results', this.handleSearchResults.bind(this));
++     }
++   }
++   
++   /**
++    * Send message to backend
++    */
++   sendMessage() {
++     const message = this.elements.input.value.trim();
++     
++     if (!message || !this.socket || !this.session) return;
++     
++     // Clear input
++     this.elements.input.value = '';
++     this.elements.input.classList.remove('has-text');
++     
++     // Add message to UI
++     this.addMessage({
++       text: message,
++       type: 'user',
++       timestamp: Date.now()
++     });
++     
++     // Update status
++     this.updateStatus('thinking');
++     
++     // Send to server
++     this.socket.emit('query:text', {
++       query: {
++         text: message,
++         timestamp: Date.now()
++       }
++     });
++     
++     // Trigger event
++     this.triggerEvent('messageSent', { text: message });
++   }
++   
++   /**
++    * Handle AI response from server
++    * @param {Object} response - AI response data
++    */
++   handleAIResponse(response) {
++     // Add message to UI
++     this.addMessage({
++       text: response.text,
++       type: 'ai',
++       timestamp: response.timestamp,
++       sources: response.sources
++     });
++     
++     // Update status
++     this.updateStatus('ready');
++     
++     // Scroll to bottom
++     this.scrollToBottom();
++     
++     // Trigger event
++     this.triggerEvent('responseReceived', response);
++   }
++   
++   /**
++    * Handle search results from server
++    * @param {Object} results - Search results data
++    */
++   handleSearchResults(results) {
++     if (results.results && results.results.length > 0) {
++       // Create message content with results
++       let message = `I found ${results.results.length} moments related to "${results.query}":\n\n`;
++       
++       results.results.forEach((result, index) => {
++         message += `${index + 1}. [${result.timestamp}] ${result.text}\n`;
++       });
++       
++       // Add message to UI
++       this.addMessage({
++         text: message,
++         type: 'search',
++         timestamp: results.timestamp,
++         results: results.results
++       });
++     } else {
++       // No results found
++       this.addMessage({
++         text: `I couldn't find any content related to "${results.query}".`,
++         type: 'ai',
++         timestamp: results.timestamp
++       });
++     }
++     
++     // Update status
++     this.updateStatus('ready');
++     
++     // Scroll to bottom
++     this.scrollToBottom();
++     
++     // Trigger event
++     this.triggerEvent('searchResultsReceived', results);
++   }
++   
++   /**
++    * Add message to chat interface
++    * @param {Object} message - Message data
++    */
++   addMessage(message) {
++     this.messages.push(message);
++     
++     // Create message element
++     const messageEl = document.createElement('div');
++     messageEl.className = `chat-message ${message.type}-message`;
++     
++     // Format timestamp
++     const time = new Date(message.timestamp);
++     const timeStr = `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}`;
++     
++     // Message content based on type
++     if (message.type === 'user') {
++       messageEl.innerHTML = `
++         <div class="message-content">${this.formatMessageText(message.text)}</div>
++         <div class="message-time">${timeStr}</div>
++       `;
++     } else if (message.type === 'ai') {
++       messageEl.innerHTML = `
++         <div class="message-avatar">AI</div>
++         <div class="message-content">${this.formatMessageText(message.text)}</div>
++         <div class="message-time">${timeStr}</div>
++       `;
++       
++       // Add source references if available
++       if (message.sources && message.sources.length > 0) {
++         const sourcesEl = document.createElement('div');
++         sourcesEl.className = 'message-sources';
++         sourcesEl.innerHTML = '<div class="sources-title">Based on:</div>';
++         
++         const sourcesList = document.createElement('ul');
++         message.sources.slice(0, 3).forEach(source => {
++           const sourceTime = this.formatTimestamp(source.timestamp);
++           const li = document.createElement('li');
++           li.className = 'source-item';
++           li.innerHTML = `<span class="source-time">${sourceTime}</span> ${this.truncateText(source.text, 50)}`;
++           li.setAttribute('data-time', source.timestamp);
++           
++           // Add click event to jump to timestamp
++           li.addEventListener('click', () => {
++             this.jumpToTimestamp(source.timestamp);
++           });
++           
++           sourcesList.appendChild(li);
++         });
++         
++         sourcesEl.appendChild(sourcesList);
++         messageEl.appendChild(sourcesEl);
++       }
++     } else if (message.type === 'search') {
++       messageEl.innerHTML = `
++         <div class="message-avatar">AI</div>
++         <div class="message-content">${this.formatMessageText(message.text)}</div>
++         <div class="message-time">${timeStr}</div>
++       `;
++       
++       // Add clickable results
++       if (message.results && message.results.length > 0) {
++         const resultsEl = document.createElement('div');
++         resultsEl.className = 'search-results';
++         
++         message.results.forEach(result => {
++           const resultItem = document.createElement('div');
++           resultItem.className = 'search-result-item';
++           resultItem.innerHTML = `
++             <span class="result-time">${result.timestamp}</span>
++             <span class="result-text">${this.truncateText(result.text, 80)}</span>
++           `;
++           resultItem.setAttribute('data-time', result.timestamp);
++           
++           // Add click event to jump to timestamp
++           resultItem.addEventListener('click', () => {
++             this.jumpToTimestamp(this.parseTimestamp(result.timestamp));
++           });
++           
++           resultsEl.appendChild(resultItem);
++         });
++         
++         messageEl.appendChild(resultsEl);
++       }
++     } else if (message.type === 'system') {
++       messageEl.innerHTML = `
++         <div class="message-content system-message">${this.formatMessageText(message.text)}</div>
++         <div class="message-time">${timeStr}</div>
++       `;
++     }
++     
++     // Add to DOM
++     this.elements.messages.appendChild(messageEl);
++     
++     // Scroll to bottom
++     this.scrollToBottom();
++   }
++   
++   /**
++    * Add system message to chat
++    * @param {string} text - Message text
++    */
++   addSystemMessage(text) {
++     this.addMessage({
++       text,
++       type: 'system',
++       timestamp: Date.now()
++     });
++   }
++   
++   /**
++    * Add suggestion buttons
++    * @param {Array} suggestions - Array of suggestion texts
++    */
++   addSuggestions(suggestions) {
++     // Clear existing suggestions
++     this.elements.suggestions.innerHTML = '';
++     
++     // Add each suggestion
++     suggestions.forEach(text => {
++       const button = document.createElement('button');
++       button.className = 'suggestion-btn';
++       button.textContent = text;
++       
++       // Add click event
++       button.addEventListener('click', () => {
++         this.elements.input.value = text;
++         this.elements.input.classList.add('has-text');
++         this.elements.input.focus();
++       });
++       
++       this.elements.suggestions.appendChild(button);
++     });
++   }
++   
++   /**
++    * Update connection status
++    * @param {string} status - Status type
++    * @param {string} message - Optional status message
++    */
++   updateStatus(status, message) {
++     const { statusIndicator, statusText } = this.elements;
++     
++     // Remove existing status classes
++     statusIndicator.classList.remove('status-ready', 'status-thinking', 'status-error', 'status-disconnected');
++     
++     // Set new status
++     switch (status) {
++       case 'ready':
++         statusIndicator.classList.add('status-ready');
++         statusText.textContent = message || 'Ready';
++         break;
++         
++       case 'thinking':
++         statusIndicator.classList.add('status-thinking');
++         statusText.textContent = message || 'Thinking...';
++         break;
++         
++       case 'error':
++         statusIndicator.classList.add('status-error');
++         statusText.textContent = message || 'Error';
++         break;
++         
++       case 'disconnected':
++         statusIndicator.classList.add('status-disconnected');
++         statusText.textContent = message || 'Disconnected';
++         break;
++     }
++   }
++   
++   /**
++    * Format message text with markdown-like syntax
++    * @param {string} text - Message text
++    * @returns {string} - Formatted HTML
++    */
++   formatMessageText(text) {
++     // Simple markdown-like formatting
++     return text
++       .replace(/\n/g, '<br>')
++       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
++       .replace(/\*(.*?)\*/g, '<em>$1</em>')
++       .replace(/`(.*?)`/g, '<code>$1</code>');
++   }
++   
++   /**
++    * Truncate text to specified length
++    * @param {string} text - Text to truncate
++    * @param {number} maxLength - Maximum length
++    * @returns {string} - Truncated text
++    */
++   truncateText(text, maxLength) {
++     if (text.length <= maxLength) return text;
++     return text.substring(0, maxLength) + '...';
++   }
++   
++   /**
++    * Format timestamp in human-readable format
++    * @param {number} timestamp - Timestamp in milliseconds
++    * @returns {string} - Formatted timestamp (MM:SS)
++    */
++   formatTimestamp(timestamp) {
++     const seconds = Math.floor(timestamp / 1000);
++     const minutes = Math.floor(seconds / 60);
++     const remainingSeconds = seconds % 60;
++     
++     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
++   }
++   
++   /**
++    * Parse timestamp string to milliseconds
++    * @param {string} timestampStr - Timestamp string (MM:SS)
++    * @returns {number} - Timestamp in milliseconds
++    */
++   parseTimestamp(timestampStr) {
++     const [minutes, seconds] = timestampStr.split(':').map(Number);
++     return (minutes * 60 + seconds) * 1000;
++   }
++   
++   /**
++    * Jump to specific timestamp in video
++    * @param {number} timestamp - Timestamp in milliseconds
++    */
++   jumpToTimestamp(timestamp) {
++     if (this.socket && this.session) {
++       this.socket.emit('remote:control', {
++         action: {
++           type: 'seek',
++           timestamp: Date.now(),
++           parameters: {
++             time: timestamp / 1000 // Convert to seconds
++           }
++         }
++       });
++       
++       // Add system message
++       this.addSystemMessage(`Jumping to ${this.formatTimestamp(timestamp)}`);
++       
++       // Trigger event
++       this.triggerEvent('jumpToTimestamp', { timestamp });
++     }
++   }
++   
++   /**
++    * Scroll chat container to bottom
++    */
++   scrollToBottom() {
++     const messages = this.elements.messages;
++     messages.scrollTop = messages.scrollHeight;
++   }
++   
++   /**
++    * Clear all messages
++    */
++   clearMessages() {
++     this.messages = [];
++     this.elements.messages.innerHTML = '';
++     
++     // Add welcome message
++     this.addSystemMessage('Ask questions about what you're watching!');
++   }
++   
++   /**
++    * Add event listener
++    * @param {string} event - Event name
++    * @param {Function} callback - Event callback
++    */
++   on(event, callback) {
++     if (!this.eventListeners[event]) {
++       this.eventListeners[event] = [];
++     }
++     
++     this.eventListeners[event].push(callback);
++     return this;
++   }
++   
++   /**
++    * Remove event listener
++    * @param {string} event - Event name
++    * @param {Function} callback - Event callback
++    */
++   off(event, callback) {
++     if (!this.eventListeners[event]) return this;
++     
++     if (callback) {
++       this.eventListeners[event] = this.eventListeners[event].filter(cb => cb !== callback);
++     } else {
++       delete this.eventListeners[event];
++     }
++     
++     return this;
++   }
++   
++   /**
++    * Trigger event
++    * @param {string} event - Event name
++    * @param {*} data - Event data
++    */
++   triggerEvent(event, data) {
++     if (!this.eventListeners[event]) return;
++     
++     this.eventListeners[event].forEach(callback => {
++       try {
++         callback(data);
++       } catch (error) {
++         console.error(`Error in ChatInterface ${event} event handler:`, error);
++       }
++     });
++   }
++   
++   /**
++    * Update connection status UI
++    * @param {boolean} connected - Connection status
++    */
++   updateConnectionStatus(connected) {
++     this.updateStatus(connected ? 'ready' : 'disconnected');
++     
++     if (connected) {
++       this.container.classList.remove('disconnected');
++     } else {
++       this.container.classList.add('disconnected');
++     }
++   }
++ }
++ 
++ export default ChatInterface; 
+```
+
+---
+
+Let me fix the linter error in the ChatInterface.js file:
+
+---
+
+
+
+---
+
+Let's fix the ChatInterface.js file completely by rewriting the affected section:
+
+---
+
+```diff
+    }
+    
+-     /**   * Clear all messages   */  clearMessages() {    this.messages = [];    this.elements.messages.innerHTML = '';        // Add welcome message    this.addSystemMessage('Ask questions about what you\'re watching!');  }
++   /**
++    * Clear all messages
++    */
++   clearMessages() {
++     this.messages = [];
++     this.elements.messages.innerHTML = '';
++     
++     // Add welcome message
++     this.addSystemMessage("Ask questions about what you're watching!");
++   }
+    
+    /**
+```
+
+---
+
+Now that we have created the necessary components for the mobile app, let's create a ConnectionManager component to handle the WebSocket connection:
+
+---
+
+```diff
+- 
++ /**
++  * Connection Manager component for the mobile app
++  * Handles WebSocket connections and reconnection logic
++  */
++ class ConnectionManager {
++   /**
++    * Initialize ConnectionManager
++    * @param {Object} options - Configuration options
++    */
++   constructor(options = {}) {
++     this.options = {
++       serverUrl: options.serverUrl || 'http://localhost:3000',
++       reconnectInterval: options.reconnectInterval || 5000,
++       maxReconnectAttempts: options.maxReconnectAttempts || 10,
++       ...options
++     };
++     
++     this.io = options.io; // Socket.io client
++     this.socket = null;
++     this.sessionId = null;
++     this.connected = false;
++     this.reconnecting = false;
++     this.reconnectAttempts = 0;
++     this.reconnectTimer = null;
++     this.eventListeners = {};
++     
++     // Initialize connection if sessionId is provided
++     if (options.sessionId) {
++       this.connect(options.sessionId);
++     }
++   }
++   
++   /**
++    * Connect to WebSocket server
++    * @param {string} sessionId - Session ID for connection
++    * @returns {Promise} - Resolves when connected
++    */
++   connect(sessionId) {
++     return new Promise((resolve, reject) => {
++       if (!this.io) {
++         reject(new Error('Socket.io client not available'));
++         return;
++       }
++       
++       this.sessionId = sessionId;
++       
++       // Initialize mobile namespace socket
++       this.socket = this.io(`${this.options.serverUrl}/mobile`);
++       
++       // Setup connection event handlers
++       this.socket.on('connect', () => {
++         console.log('Connected to server');
++         this.connected = true;
++         this.reconnectAttempts = 0;
++         
++         // Join session
++         this.socket.emit('join:session', {
++           sessionId: this.sessionId,
++           deviceInfo: this.getDeviceInfo()
++         });
++         
++         this.triggerEvent('connected');
++         resolve(this.socket);
++       });
++       
++       this.socket.on('connect_error', (error) => {
++         console.error('Connection error:', error);
++         this.connected = false;
++         this.triggerEvent('error', { type: 'connect_error', error });
++         
++         if (!this.reconnecting) {
++           this.startReconnection();
++         }
++         
++         reject(error);
++       });
++       
++       this.socket.on('disconnect', (reason) => {
++         console.log('Disconnected from server:', reason);
++         this.connected = false;
++         this.triggerEvent('disconnected', { reason });
++         
++         if (reason === 'io server disconnect') {
++           // Server initiated disconnect, don't reconnect automatically
++           this.triggerEvent('error', { 
++             type: 'server_disconnect',
++             message: 'The server disconnected the client'
++           });
++         } else {
++           // Client-side disconnection, try to reconnect
++           if (!this.reconnecting) {
++             this.startReconnection();
++           }
++         }
++       });
++       
++       this.socket.on('error', (error) => {
++         console.error('Socket error:', error);
++         this.triggerEvent('error', { type: 'socket_error', error });
++       });
++       
++       // Server-side events
++       this.socket.on('session:joined', (data) => {
++         console.log('Joined session:', data);
++         this.triggerEvent('session:joined', data);
++       });
++       
++       this.socket.on('error', (data) => {
++         console.error('Server error:', data);
++         this.triggerEvent('error', { type: 'server_error', ...data });
++       });
++     });
++   }
++   
++   /**
++    * Disconnect from WebSocket server
++    */
++   disconnect() {
++     if (this.socket) {
++       this.socket.disconnect();
++       this.socket = null;
++     }
++     
++     this.connected = false;
++     this.stopReconnection();
++     this.triggerEvent('disconnected', { reason: 'manual' });
++   }
++   
++   /**
++    * Start reconnection process
++    */
++   startReconnection() {
++     this.reconnecting = true;
++     
++     if (this.reconnectTimer) {
++       clearTimeout(this.reconnectTimer);
++     }
++     
++     this.reconnectTimer = setTimeout(() => {
++       if (this.reconnectAttempts >= this.options.maxReconnectAttempts) {
++         console.error('Max reconnection attempts reached');
++         this.reconnecting = false;
++         this.triggerEvent('error', { 
++           type: 'max_reconnect_attempts',
++           message: 'Maximum reconnection attempts reached'
++         });
++         return;
++       }
++       
++       this.reconnectAttempts++;
++       
++       console.log(`Reconnection attempt ${this.reconnectAttempts}/${this.options.maxReconnectAttempts}`);
++       this.triggerEvent('reconnecting', { attempt: this.reconnectAttempts });
++       
++       // Try to reconnect
++       if (this.socket) {
++         this.socket.connect();
++       } else if (this.sessionId) {
++         this.connect(this.sessionId).catch(() => {
++           // If reconnection fails, try again
++           this.startReconnection();
++         });
++       }
++     }, this.options.reconnectInterval);
++   }
++   
++   /**
++    * Stop reconnection process
++    */
++   stopReconnection() {
++     this.reconnecting = false;
++     this.reconnectAttempts = 0;
++     
++     if (this.reconnectTimer) {
++       clearTimeout(this.reconnectTimer);
++       this.reconnectTimer = null;
++     }
++   }
++   
++   /**
++    * Get device information
++    * @returns {Object} - Device information
++    */
++   getDeviceInfo() {
++     const info = {
++       type: 'mobile',
++       userAgent: navigator.userAgent,
++       platform: navigator.platform,
++       language: navigator.language,
++       screenWidth: window.screen.width,
++       screenHeight: window.screen.height,
++       pixelRatio: window.devicePixelRatio || 1,
++       timestamp: Date.now()
++     };
++     
++     // Try to detect mobile OS
++     if (/android/i.test(navigator.userAgent)) {
++       info.os = 'Android';
++     } else if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
++       info.os = 'iOS';
++     } else if (/Windows/.test(navigator.userAgent)) {
++       info.os = 'Windows';
++     } else if (/Mac OS X/.test(navigator.userAgent)) {
++       info.os = 'MacOS';
++     } else {
++       info.os = 'Unknown';
++     }
++     
++     return info;
++   }
++   
++   /**
++    * Check if connected to server
++    * @returns {boolean} - Connection status
++    */
++   isConnected() {
++     return this.connected && this.socket && this.socket.connected;
++   }
++   
++   /**
++    * Add event listener
++    * @param {string} event - Event name
++    * @param {Function} callback - Event callback
++    */
++   on(event, callback) {
++     if (!this.eventListeners[event]) {
++       this.eventListeners[event] = [];
++     }
++     
++     this.eventListeners[event].push(callback);
++     return this;
++   }
++   
++   /**
++    * Remove event listener
++    * @param {string} event - Event name
++    * @param {Function} callback - Event callback
++    */
++   off(event, callback) {
++     if (!this.eventListeners[event]) return this;
++     
++     if (callback) {
++       this.eventListeners[event] = this.eventListeners[event].filter(cb => cb !== callback);
++     } else {
++       delete this.eventListeners[event];
++     }
++     
++     return this;
++   }
++   
++   /**
++    * Trigger event
++    * @param {string} event - Event name
++    * @param {*} data - Event data
++    */
++   triggerEvent(event, data) {
++     if (!this.eventListeners[event]) return;
++     
++     this.eventListeners[event].forEach(callback => {
++       try {
++         callback(data);
++       } catch (error) {
++         console.error(`Error in ConnectionManager ${event} event handler:`, error);
++       }
++     });
++   }
++   
++   /**
++    * Destroy the connection manager
++    */
++   destroy() {
++     this.disconnect();
++     this.eventListeners = {};
++   }
++ }
++ 
++ export default ConnectionManager; 
+```
+
+---
+
+Now let's update the mobile app index.js file to bring all the components together:
+
+---
+
+Read file: mobile-app/src/index.js
+
+---
+
+Let's update the mobile app index.js to fix issues and integrate our new components:
+
+---
+
+```diff
+  import './styles/main.css';
+  import { io } from 'socket.io-client';
+- import QrScanner from 'qrcode-parser';
+  
+  // Import app components
+```
+
+```diff
+      this.sessionId = null;
+      this.socket = null;
+-     this.connected = false;
+-     this.tvConnected = false;
++     this.connectionManager = null;
+      this.components = {};
+      
+```
+
+```diff
+        chat: document.getElementById('chat-tab')
+      };
++     
++     // DOM elements for tab content
++     this.tabContents = {
++       remote: document.getElementById('remote-content'),
++       voice: document.getElementById('voice-content'),
++       chat: document.getElementById('chat-content')
++     };
+      
+      // Bind event handlers
+      this.handleTabClick = this.handleTabClick.bind(this);
+      this.handleManualConnect = this.handleManualConnect.bind(this);
+      this.handleQRCodeScanned = this.handleQRCodeScanned.bind(this);
+-     this.handleSocketError = this.handleSocketError.bind(this);
+      this.handleErrorDismiss = this.handleErrorDismiss.bind(this);
++     this.handleDisconnect = this.handleDisconnect.bind(this);
+      
+      // Check for saved session
+```
+
+```diff
+      try {
+        console.log('Initializing MemoryStream Mobile App');
+-       
+-       // Initialize components
+-       this.initializeComponents();
+        
+        // Set up event listeners
+        this.setupEventListeners();
++       
++       // Initialize components
++       this.initializeComponents();
+        
+        // Check for PWA installation prompts
+        this.checkForPWAPrompt();
++       
++       // Show initial screen based on URL parameters
++       this.checkUrlParameters();
+        
+        console.log('App initialization complete');
+      } catch (error) {
+        console.error('Failed to initialize app:', error);
+-       this.showError('Initialization Error', error.message);
++       this.showError('Initialization Error', error.message || 'Could not initialize the application');
++     }
++   }
++   
++   /**
++    * Check for session ID in URL parameters
++    */
++   checkUrlParameters() {
++     try {
++       const urlParams = new URLSearchParams(window.location.search);
++       const sessionId = urlParams.get('session');
++       
++       if (sessionId) {
++         console.log('Session ID found in URL:', sessionId);
++         this.connectToSession(sessionId);
++         
++         // Remove the session parameter from URL
++         const url = new URL(window.location);
++         url.searchParams.delete('session');
++         window.history.replaceState({}, '', url);
++       } else {
++         // No session in URL, show scanning screen
++         this.showScreen('scanning');
++       }
++     } catch (error) {
++       console.error('Error checking URL parameters:', error);
++       this.showScreen('scanning');
+      }
+    }
+```
+
+```diff
+            // Session still valid, try to reconnect
+            this.sessionId = sessionData.sessionId;
+-           this.connectToSession(this.sessionId);
+            return;
+          } else {
+```
+
+```diff
+      // Initialize QR code scanner
+      this.components.qrScanner = new QRCodeScanner(
+-       document.getElementById('qr-video'),
+-       {
+-         onScan: this.handleQRCodeScanned
+-       }
++       document.getElementById('qr-scanner-container'),
++       { onScan: this.handleQRCodeScanned }
+      );
+      
+-     // Initialize connection manager (will be set after connecting)
+-     this.components.connectionManager = new ConnectionManager(
+-       document.getElementById('connection-status')
+-     );
++     // Initialize connection manager
++     this.connectionManager = new ConnectionManager({
++       serverUrl: config.backendUrl,
++       reconnectInterval: config.reconnectInterval,
++       io: io
++     });
+      
+-     // Initialize remote control (will be enabled after connecting)
+-     this.components.remoteControl = new RemoteControl({
+-       dpadButtons: {
+-         up: document.getElementById('dpad-up'),
+-         down: document.getElementById('dpad-down'),
+-         left: document.getElementById('dpad-left'),
+-         right: document.getElementById('dpad-right'),
+-         center: document.getElementById('dpad-center')
+-       },
+-       mediaButtons: {
+-         playPause: document.getElementById('play-pause-btn'),
+-         rewind: document.getElementById('rewind-btn'),
+-         forward: document.getElementById('forward-btn')
+-       },
+-       volumeButtons: {
+-         up: document.getElementById('volume-up-btn'),
+-         down: document.getElementById('volume-down-btn'),
+-         mute: document.getElementById('mute-btn')
+-       },
+-       extraButtons: {
+-         back: document.getElementById('back-btn'),
+-         home: document.getElementById('home-btn'),
+-         info: document.getElementById('info-btn')
+-       }
+-     });
++     // Add connection event handlers
++     this.connectionManager.on('connected', this.handleConnected.bind(this));
++     this.connectionManager.on('disconnected', this.handleDisconnected.bind(this));
++     this.connectionManager.on('error', this.handleConnectionError.bind(this));
++     this.connectionManager.on('session:joined', this.handleSessionJoined.bind(this));
++     
++     // Connection status element
++     this.components.connectionStatus = document.getElementById('connection-status');
++   }
++   
++   /**
++    * Initialize control components after connection
++    */
++   initializeControlComponents() {
++     // Create component containers if they don't exist
++     if (!this.tabContents.remote || !this.tabContents.voice || !this.tabContents.chat) {
++       console.error('Tab content containers not found');
++       return;
++     }
++     
++     // Initialize remote control
++     this.components.remoteControl = new RemoteControl(
++       this.tabContents.remote,
++       {
++         socket: this.connectionManager.socket,
++         session: this.sessionId
++       }
++     );
+      
+-     // Initialize voice recorder (will be enabled after connecting)
++     // Initialize voice recorder
+      this.components.voiceRecorder = new VoiceRecorder(
+-       document.getElementById('voice-record-btn'),
+-       document.getElementById('voice-status-text'),
+-       document.getElementById('voice-status-icon'),
+-       document.getElementById('voice-waveform-canvas')
++       this.tabContents.voice,
++       {
++         socket: this.connectionManager.socket,
++         session: this.sessionId
++       }
+      );
+      
+-     // Initialize chat interface (will be enabled after connecting)
++     // Initialize chat interface
+      this.components.chatInterface = new ChatInterface(
+-       document.getElementById('chat-messages'),
+-       document.getElementById('chat-form'),
+-       document.getElementById('chat-input')
+-     );
++       this.tabContents.chat,
++       {
++         socket: this.connectionManager.socket,
++         session: this.sessionId
++       }
++     );
++     
++     // Add welcome message to chat
++     this.components.chatInterface.addSystemMessage('Connected to TV. Ask questions about what you\'re watching!');
+    }
+    
+```
+
+```diff
+      // Manual connect form
+      const manualConnectForm = document.getElementById('manual-connect-form');
++     if (manualConnectForm) {
+        manualConnectForm.addEventListener('submit', this.handleManualConnect);
++     }
+      
+      // Manual connect button
+      const manualConnectBtn = document.getElementById('manual-connect-btn');
++     if (manualConnectBtn) {
+        manualConnectBtn.addEventListener('click', () => {
+          this.showScreen('manualConnect');
+        });
++     }
+      
+      // Back to scan button
+      const backToScanBtn = document.getElementById('back-to-scan-btn');
++     if (backToScanBtn) {
+        backToScanBtn.addEventListener('click', () => {
+          this.showScreen('scanning');
+        });
++     }
+      
+      // Error dismiss button
+      const errorCloseBtn = document.getElementById('error-close-btn');
++     if (errorCloseBtn) {
+        errorCloseBtn.addEventListener('click', this.handleErrorDismiss);
++     }
++     
++     // Disconnect button
++     const disconnectBtn = document.getElementById('disconnect-btn');
++     if (disconnectBtn) {
++       disconnectBtn.addEventListener('click', this.handleDisconnect);
++     }
+      
+      // iOS PWA prompt close
+```
+
+```diff
+        iosPwaClose.addEventListener('click', () => {
+          const prompt = document.getElementById('ios-pwa-prompt');
++         if (prompt) {
+            prompt.classList.add('hidden');
+            localStorage.setItem('pwa_prompt_dismissed', 'true');
++         }
+        });
+      }
+```
+
+```diff
+      
+      // Update active tab content
+-     Object.values(this.tabs).forEach(tab => {
+-       tab.classList.toggle('active', tab.id === tabId);
++     Object.keys(this.tabContents).forEach(key => {
++       const tabContent = this.tabContents[key];
++       if (tabContent) {
++         tabContent.classList.toggle('active', `${key}-tab` === tabId);
++       }
+      });
+    }
+```
+
+```diff
+      event.preventDefault();
+      
+-     const sessionIdInput = document.getElementById('session-id');
++     const sessionIdInput = document.getElementById('session-id-input');
++     if (!sessionIdInput) {
++       this.showError('Form Error', 'Session ID input not found');
++       return;
++     }
++     
+      const sessionId = sessionIdInput.value.trim();
+      
+```
+
+```diff
+     * @param {string} sessionId - Session ID to connect to
+     */
+-   async connectToSession(sessionId) {
++   connectToSession(sessionId) {
+      try {
+        this.showLoading('Connecting to TV...');
+        
+        // Stop QR scanner if running
+-       if (this.components.qrScanner.isScanning) {
++       if (this.components.qrScanner && this.components.qrScanner.isScanning) {
+          this.components.qrScanner.stopScanner();
+        }
+```
+
+```diff
+        this.sessionId = sessionId;
+        
+-       // Connect to socket server
+-       this.connectSocket();
+-       
+-       // Save session to localStorage
+-       localStorage.setItem('memorystream_session', JSON.stringify({
+-         sessionId: this.sessionId,
+-         timestamp: Date.now()
+-       }));
++       // Connect through connection manager
++       this.connectionManager.connect(sessionId).catch(error => {
++         console.error('Connection error:', error);
++         this.showError('Connection Error', 'Failed to connect to the server. Please try again.');
++         this.hideLoading();
++       });
+      } catch (error) {
+-       console.error('Connection error:', error);
+-       this.showError('Connection Error', error.message);
++       console.error('Connection setup error:', error);
++       this.showError('Connection Error', error.message || 'Failed to connect');
+        this.hideLoading();
+      }
+    }
+    
+    /**
+-    * Connect to socket.io server
+-    */
+-   connectSocket() {
+-     // Disconnect existing socket if any
+-     if (this.socket) {
+-       this.socket.disconnect();
+-     }
+-     
+-     // Connect to socket.io server
+-     this.socket = io(`${config.backendUrl}/mobile`, {
+-       transports: ['websocket'],
+-       query: {
+-         clientType: 'mobile'
+-       }
+-     });
+-     
+-     // Socket event handlers
+-     this.socket.on('connect', () => {
+-       console.log('Socket connected:', this.socket.id);
+-       this.connected = true;
+-       
+-       // Join session
+-       this.socket.emit('join:session', {
+-         sessionId: this.sessionId,
+-         deviceInfo: {
+-           type: 'mobile',
+-           userAgent: navigator.userAgent,
+-           platform: navigator.platform
+-         }
+-       });
++    * Handle successful connection
++    */
++   handleConnected() {
++     console.log('Successfully connected to server');
+      
+      // Update connection status
+-       this.components.connectionManager.updateStatus('connected');
+-     });
+-     
+-     this.socket.on('disconnect', () => {
+-       console.log('Socket disconnected');
+-       this.connected = false;
+-       this.components.connectionManager.updateStatus('disconnected');
+-       
+-       // Try to reconnect after interval
+-       setTimeout(() => {
+-         if (!this.connected) {
+-           this.connectSocket();
+-         }
+-       }, config.reconnectInterval);
+-     });
+-     
+-     this.socket.on('connect_error', (error) => {
+-       console.error('Socket connection error:', error);
+-       this.handleSocketError(error);
+-     });
+-     
+-     this.socket.on('session:joined', (data) => {
++     if (this.components.connectionStatus) {
++       this.components.connectionStatus.classList.remove('disconnected');
++       this.components.connectionStatus.classList.add('connected');
++       this.components.connectionStatus.textContent = 'Connected';
++     }
++   }
++   
++   /**
++    * Handle session joined event
++    * @param {Object} data - Session data
++    */
++   handleSessionJoined(data) {
+      console.log('Session joined:', data);
+-       this.tvConnected = data.tvConnected;
+-       this.hideLoading();
++     
++     // Save session to localStorage
++     localStorage.setItem('memorystream_session', JSON.stringify({
++       sessionId: this.sessionId,
++       timestamp: Date.now()
++     }));
++     
++     // Hide loading overlay
++     this.hideLoading();
++     
++     // Show control screen
+      this.showScreen('control');
+      
+-       // Enable components with socket
+-       this.enableComponents();
+-     });
+-     
+-     this.socket.on('tv:status', (status) => {
+-       console.log('TV status update:', status);
+-       this.tvConnected = status.connected;
+-       this.components.connectionManager.updateTVStatus(this.tvConnected);
+-     });
+-     
+-     this.socket.on('response:ai', (response) => {
+-       console.log('AI response received:', response);
+-       this.components.chatInterface.addMessage('ai', response.text);
+-     });
+-   }
+-   
+-   /**
+-    * Enable components with socket connection
+-    */
+-   enableComponents() {
+-     // Enable remote control
+-     this.components.remoteControl.enable(this.socket, this.sessionId);
+-     
+-     // Enable voice recorder
+-     this.components.voiceRecorder.enable(this.socket, this.sessionId);
+-     
+-     // Enable chat interface
+-     this.components.chatInterface.enable(this.socket, this.sessionId);
+-     
+-     // Set connection manager socket
+-     this.components.connectionManager.setSocket(this.socket);
++     // Initialize control components
++     this.initializeControlComponents();
++     
++     // Set initial active tab
++     this.showTab('remote');
++   }
++   
++   /**
++    * Handle disconnection
++    */
++   handleDisconnected(data) {
++     console.log('Disconnected from server:', data);
++     
++     // Update connection status
++     if (this.components.connectionStatus) {
++       this.components.connectionStatus.classList.remove('connected');
++       this.components.connectionStatus.classList.add('disconnected');
++       this.components.connectionStatus.textContent = 'Disconnected';
++     }
++     
++     // Show reconnection message if not manual
++     if (data && data.reason !== 'manual') {
++       this.showError('Disconnected', 'Connection to the TV was lost. Trying to reconnect...');
++     }
+    }
+    
+    /**
+-    * Handle socket connection errors
+-    * @param {Error} error - Socket error
++    * Handle connection error
++    * @param {Object} error - Error data
+     */
+-   handleSocketError(error) {
+-     this.connected = false;
+-     this.components.connectionManager.updateStatus('error');
+-     
+-     console.error('Socket error:', error);
+-     this.hideLoading();
++   handleConnectionError(error) {
++     console.error('Connection error:', error);
++     
++     // Update connection status
++     if (this.components.connectionStatus) {
++       this.components.connectionStatus.classList.remove('connected');
++       this.components.connectionStatus.classList.add('error');
++       this.components.connectionStatus.textContent = 'Error';
++     }
+      
+      // Show error if not already on control screen
+      if (!this.screens.control.classList.contains('active')) {
+        this.showError('Connection Error', 'Failed to connect to the TV. Please try again.');
+-     }
++       this.hideLoading();
++     }
++   }
++   
++   /**
++    * Handle manual disconnect
++    */
++   handleDisconnect() {
++     // Disconnect connection manager
++     if (this.connectionManager) {
++       this.connectionManager.disconnect();
++     }
++     
++     // Clear stored session
++     localStorage.removeItem('memorystream_session');
++     this.sessionId = null;
++     
++     // Go back to scanning screen
++     this.showScreen('scanning');
+    }
+    
+```
+
+```diff
+      // Hide all screens
+      Object.values(this.screens).forEach(screen => {
+-       if (screen.classList.contains('screen')) {
++       if (screen && screen.classList.contains('screen')) {
+          screen.classList.remove('active');
+        }
+```
+
+```diff
+        
+        // Additional actions based on screen
+-       if (screenName === 'scanning') {
++       if (screenName === 'scanning' && this.components.qrScanner) {
+          this.components.qrScanner.startScanner();
+        } else if (screenName === 'control') {
+-         // Set initial tab
+-         this.showTab('remote');
++         // Stop QR scanner if running
++         if (this.components.qrScanner && this.components.qrScanner.isScanning) {
++           this.components.qrScanner.stopScanner();
++         }
+        }
+      }
+```
+
+```diff
+      
+      // Update tab content
+-     Object.keys(this.tabs).forEach(key => {
+-       this.tabs[key].classList.toggle('active', key === `${tabName}-tab`);
++     Object.keys(this.tabContents).forEach(key => {
++       const tabContent = this.tabContents[key];
++       if (tabContent) {
++         tabContent.classList.toggle('active', key === tabName);
++       }
+      });
+    }
+```
+
+```diff
+     */
+    showLoading(message) {
++     if (!this.screens.loading) return;
++     
+      const loadingText = this.screens.loading.querySelector('.loading-text');
+      if (loadingText && message) {
+```
+
+```diff
+     */
+    hideLoading() {
++     if (this.screens.loading) {
+        this.screens.loading.classList.add('hidden');
++     }
+    }
+    
+```
+
+```diff
+     */
+    showError(title, message) {
++     if (!this.screens.error) return;
++     
+      const errorTitle = this.screens.error.querySelector('#error-title');
+      const errorMessage = this.screens.error.querySelector('#error-message');
+      
+-     if (errorTitle) errorTitle.textContent = title;
+-     if (errorMessage) errorMessage.textContent = message;
++     if (errorTitle) errorTitle.textContent = title || 'Error';
++     if (errorMessage) errorMessage.textContent = message || 'An error occurred';
+      
+      this.screens.error.classList.remove('hidden');
+```
+
+```diff
+     */
+    hideError() {
++     if (this.screens.error) {
+        this.screens.error.classList.add('hidden');
++     }
+    }
+    
+```
+
+---
+
+Let's create the HTML structure for the mobile app to display our components:
+
+---
+
+```diff
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+-   <meta name="theme-color" content="#333333">
++   <meta name="theme-color" content="#181c24">
++   <meta name="apple-mobile-web-app-capable" content="yes">
++   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>MemoryStream Mobile</title>
+    <link rel="manifest" href="manifest.json">
+-   <link rel="icon" type="image/png" href="favicon.png">
+-   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+-   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
++   <link rel="apple-touch-icon" href="icons/icon-192x192.png">
++   <link rel="icon" href="favicon.ico">
++   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+  </head>
+  <body>
+-   <div id="app">
++   <div class="app-container">
+      <!-- Scanning Screen -->
+-     <div id="scanning-screen" class="screen active">
+-       <div class="screen-content">
+-         <div class="logo">MemoryStream</div>
+-         <h2>Scan TV QR Code</h2>
+-         <div class="camera-container">
+-           <video id="qr-video" autoplay playsinline></video>
+-           <div class="scan-region-highlight"></div>
++     <div id="scanning-screen" class="screen">
++       <div class="screen-header">
++         <h1>MemoryStream</h1>
++         <p>Connect to your TV</p>
+        </div>
+-         <div class="scan-instructions">
+-           <p>Position the QR code displayed on your TV within the highlighted area.</p>
+-         </div>
+-         <div class="button-container">
+-           <button id="manual-connect-btn" class="secondary-btn">Manual Connect</button>
++       
++       <div id="qr-scanner-container" class="qr-scanner-container">
++         <div class="scanner-overlay">
++           <div class="scanner-target"></div>
++           <div class="scanner-instructions">Point your camera at the QR code on your TV</div>
+          </div>
+        </div>
++       
++       <div class="screen-footer">
++         <button id="manual-connect-btn" class="btn btn-secondary">Enter code manually</button>
++       </div>
+      </div>
+      
+      <!-- Manual Connect Screen -->
+      <div id="manual-connect-screen" class="screen">
+-       <div class="screen-content">
+-         <div class="logo">MemoryStream</div>
+-         <h2>Connect to TV</h2>
+-         <form id="manual-connect-form">
++       <div class="screen-header">
++         <h1>Connect Manually</h1>
++       </div>
++       
++       <form id="manual-connect-form" class="connect-form">
+          <div class="form-group">
+-             <label for="session-id">Session ID</label>
+-             <input type="text" id="session-id" placeholder="Enter the Session ID from your TV">
++           <label for="session-id-input">Session ID</label>
++           <input type="text" id="session-id-input" placeholder="Enter the session ID from your TV">
+          </div>
+-           <div class="button-container">
+-             <button type="submit" class="primary-btn">Connect</button>
+-             <button type="button" id="back-to-scan-btn" class="secondary-btn">Back to Scan</button>
++         
++         <div class="form-actions">
++           <button type="submit" class="btn btn-primary">Connect</button>
++           <button type="button" id="back-to-scan-btn" class="btn btn-secondary">Back to Scanner</button>
+          </div>
+        </form>
+-       </div>
+      </div>
+      
+      <!-- Control Screen -->
+      <div id="control-screen" class="screen">
+-       <div class="screen-content">
+-         <div class="header">
+-           <div class="logo">MemoryStream</div>
+-           <div id="connection-status" class="status connected">
+-             <span class="status-indicator"></span>
+-             <span class="status-text">Connected</span>
+-           </div>
++       <div class="screen-header">
++         <h1>MemoryStream</h1>
++         <div id="connection-status" class="connection-status">Connecting...</div>
++         <button id="disconnect-btn" class="btn btn-small btn-secondary">Disconnect</button>
+        </div>
+        
++       <!-- Tab Navigation -->
+        <div class="tab-navigation">
+          <button class="tab-btn active" data-tab="remote-tab">Remote</button>
+```
+
+```diff
+        </div>
+        
+-         <!-- Remote Control Tab -->
+-         <div id="remote-tab" class="tab-content active">
+-           <div class="remote-container">
+-             <div class="d-pad">
+-               <button id="dpad-up" class="dpad-btn up">
+-                 <i class="material-icons">keyboard_arrow_up</i>
+-               </button>
+-               <button id="dpad-left" class="dpad-btn left">
+-                 <i class="material-icons">keyboard_arrow_left</i>
+-               </button>
+-               <button id="dpad-center" class="dpad-btn center">
+-                 <i class="material-icons">adjust</i>
+-               </button>
+-               <button id="dpad-right" class="dpad-btn right">
+-                 <i class="material-icons">keyboard_arrow_right</i>
+-               </button>
+-               <button id="dpad-down" class="dpad-btn down">
+-                 <i class="material-icons">keyboard_arrow_down</i>
+-               </button>
+-             </div>
+-             
+-             <div class="media-controls">
+-               <button id="rewind-btn" class="media-btn">
+-                 <i class="material-icons">fast_rewind</i>
+-               </button>
+-               <button id="play-pause-btn" class="media-btn">
+-                 <i class="material-icons">play_arrow</i>
+-               </button>
+-               <button id="forward-btn" class="media-btn">
+-                 <i class="material-icons">fast_forward</i>
+-               </button>
+-             </div>
+-             
+-             <div class="volume-controls">
+-               <button id="volume-down-btn" class="volume-btn">
+-                 <i class="material-icons">volume_down</i>
+-               </button>
+-               <button id="mute-btn" class="volume-btn">
+-                 <i class="material-icons">volume_off</i>
+-               </button>
+-               <button id="volume-up-btn" class="volume-btn">
+-                 <i class="material-icons">volume_up</i>
+-               </button>
+-             </div>
+-             
+-             <div class="extra-controls">
+-               <button id="back-btn" class="extra-btn">
+-                 <i class="material-icons">arrow_back</i>
+-               </button>
+-               <button id="home-btn" class="extra-btn">
+-                 <i class="material-icons">home</i>
+-               </button>
+-               <button id="info-btn" class="extra-btn">
+-                 <i class="material-icons">info</i>
+-               </button>
+-             </div>
+-           </div>
++       <!-- Tab Content -->
++       <div class="tab-content">
++         <!-- Remote Tab -->
++         <div id="remote-content" class="tab-pane active">
++           <!-- This will be populated by the RemoteControl component -->
+          </div>
+          
+-         <!-- Voice Control Tab -->
+-         <div id="voice-tab" class="tab-content">
+-           <div class="voice-container">
+-             <div class="voice-status">
+-               <div id="voice-status-icon" class="voice-status-icon">
+-                 <i class="material-icons">mic</i>
+-               </div>
+-               <div id="voice-status-text" class="voice-status-text">
+-                 Tap microphone to start
+-               </div>
+-             </div>
+-             
+-             <button id="voice-record-btn" class="voice-record-btn">
+-               <i class="material-icons">mic</i>
+-             </button>
+-             
+-             <div class="voice-waveform">
+-               <canvas id="voice-waveform-canvas"></canvas>
+-             </div>
+-             
+-             <div class="voice-suggestions">
+-               <p>Try saying:</p>
+-               <ul>
+-                 <li>"Play" or "Pause"</li>
+-                 <li>"Skip forward 30 seconds"</li>
+-                 <li>"What happened to [character]?"</li>
+-                 <li>"Turn on subtitles"</li>
+-               </ul>
+-             </div>
+-           </div>
++         <!-- Voice Tab -->
++         <div id="voice-content" class="tab-pane">
++           <!-- This will be populated by the VoiceRecorder component -->
+          </div>
+          
+          <!-- Chat Tab -->
+-         <div id="chat-tab" class="tab-content">
+-           <div class="chat-container">
+-             <div id="chat-messages" class="chat-messages"></div>
+-             
+-             <form id="chat-form" class="chat-form">
+-               <input type="text" id="chat-input" placeholder="Ask about the content...">
+-               <button type="submit" id="chat-send-btn">
+-                 <i class="material-icons">send</i>
+-               </button>
+-             </form>
+-           </div>
++         <div id="chat-content" class="tab-pane">
++           <!-- This will be populated by the ChatInterface component -->
+          </div>
+        </div>
+      </div>
+      
+      <!-- Loading Overlay -->
+-     <div id="loading-overlay" class="loading-overlay">
+-       <div class="spinner"></div>
+-       <div class="loading-text">Connecting...</div>
++     <div id="loading-overlay" class="overlay hidden">
++       <div class="loader"></div>
++       <div class="loading-text">Loading...</div>
+      </div>
+      
+      <!-- Error Overlay -->
+-     <div id="error-overlay" class="error-overlay hidden">
+-       <div class="error-content">
+-         <i class="material-icons error-icon">error_outline</i>
+-         <h3 id="error-title">Error</h3>
+-         <p id="error-message">Something went wrong.</p>
+-         <button id="error-close-btn" class="primary-btn">Dismiss</button>
+-       </div>
++     <div id="error-overlay" class="overlay hidden">
++       <div class="error-container">
++         <h2 id="error-title">Error</h2>
++         <p id="error-message">An error occurred.</p>
++         <button id="error-close-btn" class="btn btn-primary">OK</button>
+        </div>
+      </div>
+      
+-   <!-- iOS PWA Prompt -->
+-   <div id="ios-pwa-prompt" class="ios-pwa-prompt hidden">
+-     <div class="prompt-content">
+-       <button id="ios-pwa-close" class="prompt-close">×</button>
+-       <p>Add this app to your home screen for the best experience.</p>
+-       <div class="prompt-instructions">
+-         <p>Tap <i class="material-icons">ios_share</i> then "Add to Home Screen"</p>
++     <!-- iOS PWA Install Prompt -->
++     <div id="ios-pwa-prompt" class="overlay hidden">
++       <div class="pwa-prompt-container">
++         <h2>Install MemoryStream</h2>
++         <p>For the best experience, add this app to your home screen:</p>
++         <ol>
++           <li>Tap the share button <span class="icon-share"></span></li>
++           <li>Scroll down and tap "Add to Home Screen"</li>
++         </ol>
++         <button id="ios-pwa-close" class="btn btn-secondary">Later</button>
+        </div>
+      </div>
+    </div>
+    
+-   <!-- Register service worker for PWA -->
+-   <script>
+-     if ('serviceWorker' in navigator) {
+-       window.addEventListener('load', () => {
+-         navigator.serviceWorker.register('/service-worker.js').then(registration => {
+-           console.log('ServiceWorker registered: ', registration);
+-         }).catch(error => {
+-           console.log('ServiceWorker registration failed: ', error);
+-         });
+-       });
+-     }
+-   </script>
++   <!-- Scripts will be injected by webpack -->
+  </body>
+  </html> 
+```
+
+---
+
+Let's fix the viewport meta tag to address the accessibility concerns:
+
+---
+
+
+
+---
+
+Now let's create a CSS file to style our application:
+
+---
+
+
+
+---
+
+Now let's create a manifest.json file for the PWA functionality:
+
+---
+
+```diff
+    "name": "MemoryStream Mobile",
+    "short_name": "MemoryStream",
+-   "description": "Mobile companion app for MemoryStream TV experience",
++   "description": "Mobile companion app for MemoryStream TV application",
+    "start_url": "/",
+    "display": "standalone",
+-   "background_color": "#121212",
+-   "theme_color": "#1e88e5",
++   "background_color": "#181c24",
++   "theme_color": "#181c24",
+    "icons": [
++     {
++       "src": "icons/icon-72x72.png",
++       "sizes": "72x72",
++       "type": "image/png",
++       "purpose": "any maskable"
++     },
++     {
++       "src": "icons/icon-96x96.png",
++       "sizes": "96x96",
++       "type": "image/png",
++       "purpose": "any maskable"
++     },
++     {
++       "src": "icons/icon-128x128.png",
++       "sizes": "128x128",
++       "type": "image/png",
++       "purpose": "any maskable"
++     },
++     {
++       "src": "icons/icon-144x144.png",
++       "sizes": "144x144",
++       "type": "image/png",
++       "purpose": "any maskable"
++     },
++     {
++       "src": "icons/icon-152x152.png",
++       "sizes": "152x152",
++       "type": "image/png",
++       "purpose": "any maskable"
++     },
+      {
+        "src": "icons/icon-192x192.png",
+```
+
+```diff
+        "purpose": "any maskable"
+      },
++     {
++       "src": "icons/icon-384x384.png",
++       "sizes": "384x384",
++       "type": "image/png",
++       "purpose": "any maskable"
++     },
+      {
+        "src": "icons/icon-512x512.png",
+```
+
+```diff
+      }
+    ],
+-   "orientation": "portrait-primary",
++   "orientation": "portrait",
+    "categories": ["entertainment", "utilities"],
+    "shortcuts": [
+      {
+-       "name": "Scan QR Code",
++       "name": "Connect to TV",
++       "short_name": "Connect",
++       "description": "Scan QR code to connect to TV",
+        "url": "/?action=scan",
+-       "description": "Scan a TV QR code",
+-       "icons": [
+-         {
+-           "src": "icons/scan-96x96.png",
+-           "sizes": "96x96",
+-           "type": "image/png"
+-         }
+-       ]
++       "icons": [{ "src": "icons/shortcut-connect.png", "sizes": "96x96" }]
++     },
++     {
++       "name": "Remote Control",
++       "short_name": "Remote",
++       "description": "Control your TV",
++       "url": "/?tab=remote",
++       "icons": [{ "src": "icons/shortcut-remote.png", "sizes": "96x96" }]
+      }
+    ],
+```
+
+---
+
+Let's create a service worker file for the PWA:
+
+---
+
+```diff
+- 
++ // Service Worker for MemoryStream Mobile PWA
++ 
++ const CACHE_NAME = 'memorystream-mobile-v1';
++ const OFFLINE_URL = '/offline.html';
++ 
++ // Assets to cache immediately on install
++ const PRECACHE_ASSETS = [
++   '/',
++   '/index.html',
++   '/offline.html',
++   '/main.js',
++   '/main.css',
++   '/favicon.ico',
++   '/icons/icon-192x192.png',
++   '/icons/icon-512x512.png',
++   '/manifest.json'
++ ];
++ 
++ // Service Worker Install Event
++ self.addEventListener('install', (event) => {
++   console.log('[Service Worker] Installing Service Worker...', event);
++   
++   // Precache critical assets
++   event.waitUntil(
++     caches.open(CACHE_NAME)
++       .then((cache) => {
++         console.log('[Service Worker] Precaching assets');
++         return cache.addAll(PRECACHE_ASSETS);
++       })
++       .then(() => {
++         return self.skipWaiting();
++       })
++       .catch((error) => {
++         console.error('[Service Worker] Precache error:', error);
++       })
++   );
++ });
++ 
++ // Service Worker Activate Event
++ self.addEventListener('activate', (event) => {
++   console.log('[Service Worker] Activating Service Worker...', event);
++   
++   // Clean up old caches
++   event.waitUntil(
++     caches.keys()
++       .then((cacheNames) => {
++         return Promise.all(
++           cacheNames.map((cache) => {
++             if (cache !== CACHE_NAME) {
++               console.log('[Service Worker] Clearing old cache:', cache);
++               return caches.delete(cache);
++             }
++           })
++         );
++       })
++       .then(() => {
++         return self.clients.claim();
++       })
++   );
++   
++   return self.clients.claim();
++ });
++ 
++ // Service Worker Fetch Event
++ self.addEventListener('fetch', (event) => {
++   // Skip cross-origin requests
++   if (!event.request.url.startsWith(self.location.origin)) {
++     return;
++   }
++   
++   // Skip socket.io requests
++   if (event.request.url.includes('/socket.io/')) {
++     return;
++   }
++   
++   // Network-first strategy for API calls
++   if (event.request.url.includes('/api/')) {
++     event.respondWith(
++       fetch(event.request)
++         .catch(() => {
++           return caches.match(event.request);
++         })
++     );
++     return;
++   }
++   
++   // Cache-first strategy for static assets
++   event.respondWith(
++     caches.match(event.request)
++       .then((response) => {
++         // Return cached response if found
++         if (response) {
++           return response;
++         }
++         
++         // Otherwise try to fetch from network
++         return fetch(event.request)
++           .then((response) => {
++             // Check if valid response
++             if (!response || response.status !== 200 || response.type !== 'basic') {
++               return response;
++             }
++             
++             // Clone response to store in cache
++             const responseToCache = response.clone();
++             
++             // Add to cache for future requests
++             caches.open(CACHE_NAME)
++               .then((cache) => {
++                 cache.put(event.request, responseToCache);
++               });
++             
++             return response;
++           })
++           .catch(() => {
++             // If offline and requesting a page, show offline page
++             if (event.request.mode === 'navigate') {
++               return caches.match(OFFLINE_URL);
++             }
++           });
++       })
++   );
++ });
++ 
++ // Service Worker Message Event
++ self.addEventListener('message', (event) => {
++   console.log('[Service Worker] Message received:', event.data);
++   
++   // Handle messages from the client
++   if (event.data && event.data.type === 'SKIP_WAITING') {
++     self.skipWaiting();
++   }
++ });
++ 
++ // Background Sync Event (for offline operations)
++ self.addEventListener('sync', (event) => {
++   console.log('[Service Worker] Sync event:', event.tag);
++   
++   if (event.tag === 'offline-commands') {
++     event.waitUntil(syncOfflineCommands());
++   }
++ });
++ 
++ // Function to sync offline commands
++ async function syncOfflineCommands() {
++   try {
++     // Get offline commands from IndexedDB
++     const db = await openDatabase();
++     const commands = await getOfflineCommands(db);
++     
++     if (commands.length === 0) {
++       return;
++     }
++     
++     // Process each command
++     for (const command of commands) {
++       try {
++         // Send to server
++         const response = await fetch('/api/command/sync', {
++           method: 'POST',
++           headers: {
++             'Content-Type': 'application/json',
++           },
++           body: JSON.stringify(command)
++         });
++         
++         if (response.ok) {
++           // Remove from IndexedDB if successful
++           await removeOfflineCommand(db, command.id);
++         }
++       } catch (error) {
++         console.error('[Service Worker] Failed to sync command:', error);
++       }
++     }
++   } catch (error) {
++     console.error('[Service Worker] Sync error:', error);
++   }
++ }
++ 
++ // IndexedDB helper functions
++ function openDatabase() {
++   return new Promise((resolve, reject) => {
++     const request = indexedDB.open('MemoryStreamOfflineDB', 1);
++     
++     request.onupgradeneeded = (event) => {
++       const db = event.target.result;
++       if (!db.objectStoreNames.contains('commands')) {
++         db.createObjectStore('commands', { keyPath: 'id' });
++       }
++     };
++     
++     request.onsuccess = (event) => {
++       resolve(event.target.result);
++     };
++     
++     request.onerror = (event) => {
++       reject(event.target.error);
++     };
++   });
++ }
++ 
++ function getOfflineCommands(db) {
++   return new Promise((resolve, reject) => {
++     const transaction = db.transaction(['commands'], 'readonly');
++     const store = transaction.objectStore('commands');
++     const request = store.getAll();
++     
++     request.onsuccess = (event) => {
++       resolve(event.target.result);
++     };
++     
++     request.onerror = (event) => {
++       reject(event.target.error);
++     };
++   });
++ }
++ 
++ function removeOfflineCommand(db, id) {
++   return new Promise((resolve, reject) => {
++     const transaction = db.transaction(['commands'], 'readwrite');
++     const store = transaction.objectStore('commands');
++     const request = store.delete(id);
++     
++     request.onsuccess = () => {
++       resolve();
++     };
++     
++     request.onerror = (event) => {
++       reject(event.target.error);
++     };
++   });
++ } 
+```
+
+---
+
+Now let's create an offline.html fallback page:
+
+---
+
+```diff
+- 
++ <!DOCTYPE html>
++ <html lang="en">
++ <head>
++   <meta charset="UTF-8">
++   <meta name="viewport" content="width=device-width, initial-scale=1.0">
++   <meta name="theme-color" content="#181c24">
++   <title>MemoryStream - Offline</title>
++   <style>
++     :root {
++       --color-primary: #5c6bc0;
++       --color-primary-dark: #26418f;
++       --color-background: #181c24;
++       --color-surface: #252a34;
++       --color-text: #f0f0f0;
++       --color-text-secondary: #b0b0b0;
++     }
++     
++     * {
++       box-sizing: border-box;
++       margin: 0;
++       padding: 0;
++     }
++     
++     html, body {
++       height: 100%;
++       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
++       background-color: var(--color-background);
++       color: var(--color-text);
++     }
++     
++     .container {
++       display: flex;
++       flex-direction: column;
++       align-items: center;
++       justify-content: center;
++       height: 100%;
++       padding: 20px;
++       text-align: center;
++     }
++     
++     .logo {
++       font-size: 28px;
++       font-weight: bold;
++       margin-bottom: 20px;
++       color: var(--color-primary);
++     }
++     
++     .offline-icon {
++       width: 100px;
++       height: 100px;
++       margin-bottom: 20px;
++       opacity: 0.8;
++     }
++     
++     h1 {
++       margin-bottom: 10px;
++     }
++     
++     p {
++       margin-bottom: 30px;
++       color: var(--color-text-secondary);
++       max-width: 500px;
++     }
++     
++     .btn {
++       background-color: var(--color-primary);
++       color: white;
++       border: none;
++       border-radius: 8px;
++       padding: 12px 24px;
++       font-size: 16px;
++       font-weight: 500;
++       cursor: pointer;
++       transition: background-color 0.2s;
++     }
++     
++     .btn:hover {
++       background-color: var(--color-primary-dark);
++     }
++   </style>
++ </head>
++ <body>
++   <div class="container">
++     <div class="logo">MemoryStream</div>
++     <svg class="offline-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#5c6bc0">
++       <path d="M0 0h24v24H0z" fill="none"/>
++       <path d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L10.52 6c1.1-.17 2.26-.26 3.48-.26 5.75 0 9.3 2.74 9.73 3.03L12 14.8 8.41 12.3 14.1 18H14L7.1 10.9 8.65 12h-.01.01L3 8.28v-.01c1.07-.73 2.61-1.52 4.35-2.02L9.5 6.67 3.14 5.9C2.5 6.38 2 6.83 2 7c0 .48 3.19 3.62 10 3.62 2.94 0 5.31-.43 7-1.03v4.31c-1.77.57-4.17.82-7 .82-2.48 0-4.56-.5-6-1.11v4.07c1.73.84 4.03 1.34 6 1.34 1.14 0 2.22-.11 3.25-.29L16.3 24h3.32L6.32 2H3l9.4 12.73L8.55 13.8c-2.37-.28-4.7-.87-6.55-1.82V19c3.35 1.97 7.95 2.43 14 1.81V20h1.77C21.87 17.7 24 15 24 7c0-1.23-1.67-.27-2.5-1.34l.14 1.34c0 .43-2.69 3.25-10 3.25-.8 0-1.53-.04-2.22-.1l5.99 5.99a82 82 0 0 0 9.56-1.14L15.5 9.5C18.97 9.08 22.23 7.92 23.64 7z"/>
++     </svg>
++     <h1>You're Offline</h1>
++     <p>Unable to connect to MemoryStream servers. Please check your internet connection and try again.</p>
++     <button class="btn" onclick="window.location.reload()">Try Again</button>
++   </div>
++   
++   <script>
++     // Check for online status
++     window.addEventListener('online', () => {
++       window.location.reload();
++     });
++   </script>
++ </body>
++ </html> 
+```
+
+---
+
+Now let's update the webpack.config.js file to ensure proper bundling of our application:
+
+---
+
+```diff
+  const HtmlWebpackPlugin = require('html-webpack-plugin');
+  const CopyWebpackPlugin = require('copy-webpack-plugin');
++ const { CleanWebpackPlugin } = require('clean-webpack-plugin');
++ const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+  const WorkboxPlugin = require('workbox-webpack-plugin');
++ const webpack = require('webpack');
+  
+  module.exports = (env, argv) => {
+    const isProduction = argv.mode === 'production';
+    
+    return {
+-     entry: './src/index.js',
++     entry: {
++       main: './src/index.js'
++     },
+      output: {
+        path: path.resolve(__dirname, 'dist'),
+-       filename: 'bundle.[contenthash].js',
+-       clean: true
++       filename: '[name].[contenthash].js',
++       publicPath: '/'
+      },
++     devtool: isProduction ? 'source-map' : 'eval-source-map',
+      devServer: {
+        static: {
+-         directory: path.join(__dirname, 'public'),
++         directory: path.join(__dirname, 'public')
+        },
+-       compress: true,
++       hot: true,
+        port: 8081,
+-       hot: true,
+        historyApiFallback: true,
+-       open: true
++       compress: true
+      },
+      module: {
+        rules: [
++         {
++           test: /\.js$/,
++           exclude: /node_modules/,
++           use: {
++             loader: 'babel-loader',
++             options: {
++               presets: ['@babel/preset-env']
++             }
++           }
++         },
+          {
+            test: /\.css$/,
+-           use: ['style-loader', 'css-loader'],
++           use: [
++             isProduction ? MiniCssExtractPlugin.loader : 'style-loader',
++             'css-loader'
++           ]
+          },
+          {
+-           test: /\.(png|svg|jpg|jpeg|gif)$/i,
++           test: /\.(png|svg|jpg|jpeg|gif|webp)$/i,
+            type: 'asset/resource',
++           generator: {
++             filename: 'images/[name].[hash][ext]'
++           }
+          },
+          {
+            test: /\.(woff|woff2|eot|ttf|otf)$/i,
+            type: 'asset/resource',
+-         },
+-       ],
++           generator: {
++             filename: 'fonts/[name].[hash][ext]'
++           }
++         }
++       ]
+      },
+      plugins: [
++       new CleanWebpackPlugin(),
+        new HtmlWebpackPlugin({
+          template: './public/index.html',
+-         favicon: './public/favicon.png',
+          minify: isProduction ? {
+            removeComments: true,
+```
+
+```diff
+            minifyJS: true,
+            minifyCSS: true,
+-           minifyURLs: true,
++           minifyURLs: true
+          } : false
+        }),
+```
+
+```diff
+            {
+              from: 'public',
++             to: '',
+              globOptions: {
+-               ignore: ['**/index.html', '**/favicon.png'],
+-             },
+-           },
+-         ],
+-       }),
+-       // Only add the service worker in production
++               ignore: ['**/index.html']
++             }
++           }
++         ]
++       }),
++       new webpack.DefinePlugin({
++         'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
++         'process.env.BACKEND_URL': JSON.stringify(process.env.BACKEND_URL || 'http://localhost:3000')
++       }),
+        ...(isProduction ? [
+-         new WorkboxPlugin.GenerateSW({
+-           clientsClaim: true,
+-           skipWaiting: true,
+-           runtimeCaching: [
+-             {
+-               urlPattern: /\.(js|css|html)$/,
+-               handler: 'StaleWhileRevalidate',
+-             },
+-             {
+-               urlPattern: /^https:\/\/fonts\.googleapis\.com/,
+-               handler: 'StaleWhileRevalidate',
+-             },
+-             {
+-               urlPattern: /^https:\/\/fonts\.gstatic\.com/,
+-               handler: 'CacheFirst',
+-             },
+-           ],
++         new MiniCssExtractPlugin({
++           filename: 'styles/[name].[contenthash].css'
++         }),
++         new WorkboxPlugin.InjectManifest({
++           swSrc: './src/service-worker.js',
++           swDest: 'service-worker.js',
++           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5MB
+          })
+        ] : [])
+      ],
+-     resolve: {
+-       extensions: ['.js'],
+-     },
+-     devtool: isProduction ? 'source-map' : 'eval-source-map',
++     optimization: {
++       splitChunks: {
++         chunks: 'all',
++         name: false
++       },
++       runtimeChunk: 'single'
++     },
+      performance: {
+        hints: isProduction ? 'warning' : false,
+-     },
+-     optimization: {
+-       minimize: isProduction,
+-     },
++       maxEntrypointSize: 512000,
++       maxAssetSize: 512000
++     }
+    };
+  }; 
+```
+
+---
+
+Now, let's update the package.json to include all the necessary dependencies:
+
+---
+
+```diff
+      "start": "webpack serve --mode development",
+      "build": "webpack --mode production",
+-     "lint": "eslint src/**/*.js"
++     "lint": "eslint src/**/*.js",
++     "test": "jest"
+    },
+    "dependencies": {
++     "socket.io-client": "^4.7.2",
+      "qrcode-parser": "^1.0.0",
+-     "socket.io-client": "^4.7.2"
++     "workbox-window": "^7.0.0"
+    },
+    "devDependencies": {
++     "@babel/core": "^7.23.6",
++     "@babel/preset-env": "^7.23.6",
++     "babel-loader": "^9.1.3",
++     "clean-webpack-plugin": "^4.0.0",
+      "copy-webpack-plugin": "^11.0.0",
+      "css-loader": "^6.8.1",
+-     "eslint": "^8.47.0",
++     "eslint": "^8.56.0",
+      "html-webpack-plugin": "^5.5.3",
++     "jest": "^29.7.0",
++     "mini-css-extract-plugin": "^2.7.6",
+      "style-loader": "^3.3.3",
+      "webpack": "^5.88.2",
+      "webpack-cli": "^5.1.4",
+      "webpack-dev-server": "^4.15.1",
+      "workbox-webpack-plugin": "^7.0.0"
+-   }
++   },
++   "browserslist": [
++     "> 1%",
++     "last 2 versions",
++     "not dead",
++     "not ie 11"
++   ],
++   "engines": {
++     "node": ">=18.0.0"
++   },
++   "private": true
+  } 
+```
+
+---
+
+Let's update the README.md with instructions on how to run the application:
+
+---
+
+Read file: README.md
+
+---
+
+```diff
+  ├── backend/           # Node.js backend server
+  │   ├── src/           # Server source code
++ │   │   ├── index.js   # Main server file
++ │   │   └── services/  # Services for AI, session management, etc.
+  │   └── package.json   # Backend dependencies
+  ├── tv-app/            # Senza TV application
+  │   ├── src/           # TV app source code
++ │   │   ├── index.js   # Entry point
++ │   │   └── components/# UI Components
+  │   ├── public/        # Static assets
+  │   └── package.json   # TV app dependencies
+  └── mobile-app/        # Mobile companion app (PWA)
+      ├── src/           # Mobile app source code
++     │   ├── index.js   # Entry point
++     │   └── components/# UI Components
+      ├── public/        # Static assets
+      └── package.json   # Mobile app dependencies
+```
+
+```diff
+  
+  - Node.js 18.x or higher
+- - pnpm package manager
+- - Senza platform access (for TV app deployment)
++ - pnpm package manager (`npm install -g pnpm`)
+  - OpenAI API key (for AI features)
++ - Modern web browser (Chrome/Edge recommended for best compatibility)
+  
+  ### Environment Setup
+  
+- Create a `.env` file in the backend directory:
++ 1. Clone the repository:
++    ```bash
++    git clone https://github.com/your-username/memorystream.git
++    cd memorystream
++    ```
++ 
++ 2. Create a `.env` file in the backend directory:
+  
+  ```
+```
+
+```diff
+  1. **TV App Setup**:
+     - Launch the TV app in a browser or on the Senza platform
+-    - A session will be created and a QR code displayed
++    - The app will connect to the backend and create a session
++    - A QR code will be displayed for mobile pairing
++    - You can select a video from the provided samples or enter a custom URL
+  
+  2. **Mobile Companion Setup**:
+     - Open the mobile app in a browser or install the PWA
+-    - Scan the QR code displayed on the TV
+-    - Your devices are now paired
++    - Scan the QR code displayed on the TV using your phone's camera
++    - Your devices are now paired and ready to communicate
+  
+  3. **Using Remote Control**:
+-    - Use the d-pad to navigate TV interface
+-    - Media controls for play/pause, rewind, forward
+-    - Volume controls for audio adjustment
++    - The Remote tab provides a D-pad for navigating the TV interface
++    - Media controls allow play/pause, rewind, and fast forward
++    - Volume controls adjust audio level or mute the sound
++    - Additional buttons provide functions like back, home, and settings
+  
+  4. **Voice Commands**:
+-    - Tab to the Voice section in the mobile app
+-    - Tap the microphone icon and speak your command
+-    - Examples: "Play", "Pause", "Jump forward 30 seconds"
++    - Navigate to the Voice tab in the mobile app
++    - Press and hold the microphone button while speaking your command
++    - Release the button to process the command
++    - Examples: 
++      - "Play the video"
++      - "Pause"
++      - "Skip forward 30 seconds"
++      - "Volume up"
++      - "Turn on subtitles"
+  
+  5. **Content Q&A**:
+-    - Tab to the Chat section in the mobile app
+-    - Type questions about the content you're watching
+-    - The AI will respond with context-aware answers
++    - Go to the Chat tab in the mobile app
++    - Type questions about what you're watching
++    - The AI will analyze the content and provide relevant answers
++    - You can tap on timestamps in the responses to jump to specific moments
++    - Example questions:
++      - "Who is that character?"
++      - "What just happened?"
++      - "Why did they do that?"
++      - "Explain the plot so far"
+  
+- ## Architecture
++ ## Technical Implementation
+  
+- ### Backend
++ ### Backend Architecture
+  
+- - Node.js with Express
+- - Socket.io for real-time communication
+- - OpenAI API integration for Whisper and GPT
+- 
+- ### TV App
+- 
+- - Vanilla JavaScript
+- - Senza SDK integration
+- - ShakaPlayer for video playback
+- 
+- ### Mobile App
+- 
+- - Progressive Web App (PWA)
+- - WebRTC for voice capture
+- - Socket.io for communication with backend
++ - **Node.js with Express**: Provides the API endpoints and manages WebSocket connections
++ - **Socket.io**: Enables real-time bidirectional communication between the TV app, mobile app, and server
++ - **OpenAI Integration**:
++   - Whisper API for real-time speech-to-text and subtitle generation
++   - GPT-4 for natural language understanding and content question answering
++ - **Session Management**: Tracks connections between TV and mobile devices
++ 
++ ### TV App Implementation
++ 
++ - **Vanilla JavaScript**: Lightweight implementation for optimal performance on TV platforms
++ - **ShakaPlayer**: Advanced media player for streaming video content
++ - **Component Architecture**: Modular design with specialized components:
++   - `VideoPlayer`: Handles video playback and media controls
++   - `SubtitleManager`: Processes and displays real-time subtitles
++   - `RemoteNavigation`: Manages focus-based navigation for remote control
++   - `ConnectionManager`: Handles WebSocket connections with backend
++   - `AIAssistant`: Displays AI responses and content information
++ 
++ ### Mobile App Implementation
++ 
++ - **Progressive Web App**: Cross-platform compatibility with native-like features
++ - **Responsive Design**: Works seamlessly on various mobile devices and orientations
++ - **WebRTC**: Captures voice input for command processing
++ - **Socket.io Client**: Communicates with the backend in real-time
++ - **Component Architecture**:
++   - `QRCodeScanner`: Scans TV pairing code
++   - `RemoteControl`: D-pad and media button interface
++   - `VoiceRecorder`: Voice command recording and processing
++   - `ChatInterface`: Text-based interaction with AI
++   - `ConnectionManager`: Robust WebSocket connection handling with auto-reconnect
++ 
++ ## Deploying to Production
++ 
++ For a production deployment, follow these steps:
++ 
++ 1. **Backend Deployment**:
++    - Deploy to a Node.js hosting environment (AWS, Heroku, DigitalOcean, etc.)
++    - Set environment variables for `PORT`, `NODE_ENV=production`, and `OPENAI_API_KEY`
++    - Configure a production database for session storage (optional)
++ 
++ 2. **TV App Deployment**:
++    - Build the app with the correct backend URL: `BACKEND_URL=https://your-backend-url pnpm run build`
++    - Deploy the contents of the `tv-app/dist` directory to a static web server or CDN
++    - For Senza platform deployment, follow their specific deployment guidelines
++ 
++ 3. **Mobile App Deployment**:
++    - Build the app with the correct backend URL: `BACKEND_URL=https://your-backend-url pnpm run build`
++    - Deploy the contents of the `mobile-app/dist` directory to a static web server or CDN
++    - Configure your server to support HTTPS (required for PWA and WebRTC features)
++    - Set appropriate cache headers for service worker support
+  
+  ## Development Rules
+```
+
+```diff
+  - `mobile-service.mdc`: Mobile companion app rules
+  - `backend-service.mdc`: Backend service rules
++ 
++ ## Troubleshooting
++ 
++ - **Connection Issues**: Ensure the backend server is running and accessible from both the TV and mobile app
++ - **QR Code Scanning**: Ensure good lighting and a clear view of the QR code
++ - **Voice Commands**: Check microphone permissions in your browser settings
++ - **Subtitle Generation**: Verify your OpenAI API key has sufficient credits and permissions
+  
+  ## License
+  
+- Proprietary - Daniel Hill AllPro.Enterprises Novus | Nexum Labs CR 2025
++ Proprietary - Daniel Hill AllPro.Enterprises Novus | Nexum Labs CR 2025 ALL RIGHTS RESERVED
+  
+- ## Contributing
++ ## Contact
+  
+- This project was developed as part of the Senza Hackathon and is not open for public contributions at this time. 
++ For questions about the project, please contact:
++ - Daniel Hill, AllPro.Enterprises Novus | Nexum Labs 
+```
+
+---
+
+Let's create a build script to make it easier to build all components:
+
+---
+
+```diff
+- 
++ #!/usr/bin/env node
++ 
++ /**
++  * MemoryStream Build Script
++  * 
++  * This script builds all components of the MemoryStream application.
++  * Usage: node build.js [options]
++  * 
++  * Options:
++  *   --backend-only    Build only the backend
++  *   --tv-only         Build only the TV app
++  *   --mobile-only     Build only the mobile app
++  *   --production      Build for production (default is development)
++  *   --help            Show this help message
++  */
++ 
++ const { spawn, execSync } = require('child_process');
++ const path = require('path');
++ const fs = require('fs');
++ 
++ // Parse arguments
++ const args = process.argv.slice(2);
++ const options = {
++   backendOnly: args.includes('--backend-only'),
++   tvOnly: args.includes('--tv-only'),
++   mobileOnly: args.includes('--mobile-only'),
++   production: args.includes('--production'),
++   help: args.includes('--help'),
++ };
++ 
++ // Show help if requested
++ if (options.help) {
++   console.log(`
++ MemoryStream Build Script
++ 
++ This script builds all components of the MemoryStream application.
++ Usage: node build.js [options]
++ 
++ Options:
++   --backend-only    Build only the backend
++   --tv-only         Build only the TV app
++   --mobile-only     Build only the mobile app
++   --production      Build for production (default is development)
++   --help            Show this help message
++   `);
++   process.exit(0);
++ }
++ 
++ // Validate project structure
++ const projectRoot = process.cwd();
++ const components = ['backend', 'tv-app', 'mobile-app'];
++ 
++ components.forEach(component => {
++   const componentPath = path.join(projectRoot, component);
++   if (!fs.existsSync(componentPath)) {
++     console.error(`Error: Component directory "${component}" not found.`);
++     console.error(`Make sure you're running this script from the project root.`);
++     process.exit(1);
++   }
++   
++   const packageJsonPath = path.join(componentPath, 'package.json');
++   if (!fs.existsSync(packageJsonPath)) {
++     console.error(`Error: package.json not found in "${component}" directory.`);
++     process.exit(1);
++   }
++ });
++ 
++ // Function to run pnpm command
++ function runPnpmCommand(cwd, command, args = []) {
++   return new Promise((resolve, reject) => {
++     console.log(`Running: pnpm ${command} ${args.join(' ')} in ${cwd}`);
++     
++     const child = spawn('pnpm', [command, ...args], {
++       cwd,
++       stdio: 'inherit',
++       shell: true
++     });
++     
++     child.on('close', code => {
++       if (code === 0) {
++         resolve();
++       } else {
++         reject(new Error(`Command failed with exit code ${code}`));
++       }
++     });
++     
++     child.on('error', reject);
++   });
++ }
++ 
++ // Check if pnpm is installed
++ function checkPnpm() {
++   try {
++     execSync('pnpm --version', { stdio: 'ignore' });
++     return true;
++   } catch (error) {
++     return false;
++   }
++ }
++ 
++ // Build components
++ async function buildComponents() {
++   if (!checkPnpm()) {
++     console.error('Error: pnpm is not installed. Please install it by running: npm install -g pnpm');
++     process.exit(1);
++   }
++   
++   console.log('=== MemoryStream Build Process ===');
++   console.log(`Build mode: ${options.production ? 'Production' : 'Development'}`);
++   
++   try {
++     // Build backend
++     if (!options.tvOnly && !options.mobileOnly) {
++       console.log('\n=== Building Backend ===');
++       await runPnpmCommand(
++         path.join(projectRoot, 'backend'),
++         options.production ? 'build' : 'build:dev'
++       );
++     }
++     
++     // Build TV app
++     if (!options.backendOnly && !options.mobileOnly) {
++       console.log('\n=== Building TV App ===');
++       await runPnpmCommand(
++         path.join(projectRoot, 'tv-app'),
++         'build',
++         options.production ? ['--mode', 'production'] : ['--mode', 'development']
++       );
++     }
++     
++     // Build mobile app
++     if (!options.backendOnly && !options.tvOnly) {
++       console.log('\n=== Building Mobile App ===');
++       await runPnpmCommand(
++         path.join(projectRoot, 'mobile-app'),
++         'build',
++         options.production ? ['--mode', 'production'] : ['--mode', 'development']
++       );
++     }
++     
++     console.log('\n=== Build Complete ===');
++     console.log('Build artifacts:');
++     
++     if (!options.tvOnly && !options.mobileOnly) {
++       console.log('- Backend: backend/dist/');
++     }
++     
++     if (!options.backendOnly && !options.mobileOnly) {
++       console.log('- TV App: tv-app/dist/');
++     }
++     
++     if (!options.backendOnly && !options.tvOnly) {
++       console.log('- Mobile App: mobile-app/dist/');
++     }
++     
++   } catch (error) {
++     console.error('\nBuild failed:', error.message);
++     process.exit(1);
++   }
++ }
++ 
++ // Start the build process
++ buildComponents(); 
+```
+
+---
+
+Finally, let's create a dev script to start all components in development mode:
+
+---
+
+```diff
+- 
++ #!/usr/bin/env node
++ 
++ /**
++  * MemoryStream Development Script
++  * 
++  * This script starts all components of the MemoryStream application in development mode.
++  * Usage: node dev.js [options]
++  * 
++  * Options:
++  *   --backend-only    Start only the backend
++  *   --tv-only         Start only the TV app
++  *   --mobile-only     Start only the mobile app
++  *   --help            Show this help message
++  */
++ 
++ const { spawn } = require('child_process');
++ const path = require('path');
++ const fs = require('fs');
++ 
++ // Parse arguments
++ const args = process.argv.slice(2);
++ const options = {
++   backendOnly: args.includes('--backend-only'),
++   tvOnly: args.includes('--tv-only'),
++   mobileOnly: args.includes('--mobile-only'),
++   help: args.includes('--help'),
++ };
++ 
++ // Show help if requested
++ if (options.help) {
++   console.log(`
++ MemoryStream Development Script
++ 
++ This script starts all components of the MemoryStream application in development mode.
++ Usage: node dev.js [options]
++ 
++ Options:
++   --backend-only    Start only the backend
++   --tv-only         Start only the TV app
++   --mobile-only     Start only the mobile app
++   --help            Show this help message
++   `);
++   process.exit(0);
++ }
++ 
++ // Validate project structure
++ const projectRoot = process.cwd();
++ const components = ['backend', 'tv-app', 'mobile-app'];
++ 
++ components.forEach(component => {
++   const componentPath = path.join(projectRoot, component);
++   if (!fs.existsSync(componentPath)) {
++     console.error(`Error: Component directory "${component}" not found.`);
++     console.error(`Make sure you're running this script from the project root.`);
++     process.exit(1);
++   }
++   
++   const packageJsonPath = path.join(componentPath, 'package.json');
++   if (!fs.existsSync(packageJsonPath)) {
++     console.error(`Error: package.json not found in "${component}" directory.`);
++     process.exit(1);
++   }
++ });
++ 
++ // Function to run pnpm command in background
++ function runPnpmCommand(cwd, command, name) {
++   console.log(`Starting ${name}...`);
++   
++   const child = spawn('pnpm', [command], {
++     cwd,
++     shell: true,
++     stdio: 'pipe',
++     detached: false
++   });
++   
++   // Prefix output with component name
++   const prefixOutput = (data, prefix, color) => {
++     const lines = data.toString().split('\n').filter(line => line.trim());
++     lines.forEach(line => {
++       const timestamp = new Date().toLocaleTimeString();
++       console.log(`\x1b[${color}m[${timestamp}] [${prefix}]\x1b[0m ${line}`);
++     });
++   };
++   
++   // Handle stdout
++   child.stdout.on('data', data => {
++     prefixOutput(data, name, getColorCode(name));
++   });
++   
++   // Handle stderr
++   child.stderr.on('data', data => {
++     prefixOutput(data, name, getColorCode(name));
++   });
++   
++   // Handle process exit
++   child.on('close', code => {
++     if (code !== 0) {
++       console.error(`\x1b[31m[${name}] Process exited with code ${code}\x1b[0m`);
++     }
++   });
++   
++   // Handle process error
++   child.on('error', error => {
++     console.error(`\x1b[31m[${name}] Process error: ${error.message}\x1b[0m`);
++   });
++   
++   return child;
++ }
++ 
++ // Get color code based on component name
++ function getColorCode(name) {
++   switch (name) {
++     case 'Backend':
++       return '36'; // Cyan
++     case 'TV App':
++       return '32'; // Green
++     case 'Mobile App':
++       return '35'; // Magenta
++     default:
++       return '37'; // White
++   }
++ }
++ 
++ // Function to start development servers
++ function startDevServers() {
++   const processes = [];
++   
++   console.log('\x1b[1m=== MemoryStream Development Environment ===\x1b[0m');
++   
++   // Check if .env file exists in backend folder
++   const envPath = path.join(projectRoot, 'backend', '.env');
++   if (!fs.existsSync(envPath)) {
++     console.warn('\x1b[33mWarning: .env file not found in backend directory.\x1b[0m');
++     console.warn('\x1b[33mAI features may not work without an OpenAI API key.\x1b[0m');
++     console.warn('\x1b[33mCreate a .env file with OPENAI_API_KEY=your_key.\x1b[0m');
++   }
++   
++   // Start backend
++   if (!options.tvOnly && !options.mobileOnly) {
++     processes.push(runPnpmCommand(
++       path.join(projectRoot, 'backend'),
++       'dev',
++       'Backend'
++     ));
++   }
++   
++   // Start TV app (with delay to ensure backend is up)
++   if (!options.backendOnly && !options.mobileOnly) {
++     setTimeout(() => {
++       processes.push(runPnpmCommand(
++         path.join(projectRoot, 'tv-app'),
++         'start',
++         'TV App'
++       ));
++     }, 2000);
++   }
++   
++   // Start mobile app (with delay to ensure backend is up)
++   if (!options.backendOnly && !options.tvOnly) {
++     setTimeout(() => {
++       processes.push(runPnpmCommand(
++         path.join(projectRoot, 'mobile-app'),
++         'start',
++         'Mobile App'
++       ));
++     }, 3000);
++   }
++   
++   // Print access information after a delay
++   setTimeout(() => {
++     console.log('\n\x1b[1m=== Development Servers Running ===\x1b[0m');
++     
++     if (!options.tvOnly && !options.mobileOnly) {
++       console.log('\x1b[36mBackend:\x1b[0m http://localhost:3000');
++     }
++     
++     if (!options.backendOnly && !options.mobileOnly) {
++       console.log('\x1b[32mTV App:\x1b[0m http://localhost:8080');
++     }
++     
++     if (!options.backendOnly && !options.tvOnly) {
++       console.log('\x1b[35mMobile App:\x1b[0m http://localhost:8081');
++     }
++     
++     console.log('\n\x1b[1mPress Ctrl+C to stop all servers\x1b[0m');
++   }, 5000);
++   
++   // Handle graceful shutdown
++   const shutdown = () => {
++     console.log('\n\x1b[1m=== Shutting down MemoryStream servers ===\x1b[0m');
++     
++     processes.forEach(process => {
++       if (!process.killed) {
++         process.kill();
++       }
++     });
++     
++     process.exit(0);
++   };
++   
++   // Listen for SIGINT (Ctrl+C)
++   process.on('SIGINT', shutdown);
++   process.on('SIGTERM', shutdown);
++ }
++ 
++ // Start development servers
++ startDevServers(); 
+```
+
+---
+
+Let's update the root package.json to include scripts for the build and dev tools:
+
+---
+
+```diff
+- 
++ {
++   "name": "memorystream",
++   "version": "0.1.0",
++   "description": "AI-powered TV application with mobile companion",
++   "private": true,
++   "scripts": {
++     "dev": "node dev.js",
++     "dev:backend": "node dev.js --backend-only",
++     "dev:tv": "node dev.js --tv-only",
++     "dev:mobile": "node dev.js --mobile-only",
++     "build": "node build.js",
++     "build:prod": "node build.js --production",
++     "build:backend": "node build.js --backend-only",
++     "build:tv": "node build.js --tv-only",
++     "build:mobile": "node build.js --mobile-only",
++     "install:all": "pnpm install && cd backend && pnpm install && cd ../tv-app && pnpm install && cd ../mobile-app && pnpm install",
++     "clean": "rm -rf backend/dist tv-app/dist mobile-app/dist"
++   },
++   "workspaces": [
++     "backend",
++     "tv-app",
++     "mobile-app"
++   ],
++   "engines": {
++     "node": ">=18.0.0",
++     "pnpm": ">=8.0.0"
++   },
++   "author": "Daniel Hill, AllPro.Enterprises",
++   "license": "UNLICENSED",
++   "repository": {
++     "type": "git",
++     "url": "https://github.com/your-username/memorystream.git"
++   }
++ } 
+```
+
+---
+
+Now all components are ready for development and production. Let's summarize the work we've done:
+
+1. **Mobile Components**
+   - Created RemoteControl.js for TV navigation
+   - Created VoiceRecorder.js for voice command input
+   - Created ChatInterface.js for content Q&A
+   - Created ConnectionManager.js for WebSocket communication
+
+2. **Mobile App Structure**
+   - Created HTML structure with responsive design
+   - Added comprehensive CSS styling
+   - Updated index.js to connect components
+   - Implemented session persistence and QR code scanning
+
+3. **PWA Support**
+   - Created manifest.json for PWA installation
+   - Implemented service worker for offline support
+   - Created offline fallback page
+   - Added installation prompt for iOS devices
+
+4. **Build System**
+   - Updated webpack configuration for production builds
+   - Set up package.json with all dependencies
+   - Created build script for all components
+   - Created dev script for local development
+
+5. **Documentation**
+   - Updated README with detailed instructions
+   - Added comprehensive troubleshooting section
+   - Improved architecture documentation
+   - Added deployment guidance
+
+The mobile app now provides a complete companion experience for the MemoryStream TV application with remote control functionality, voice command input, and content Q&A through a chat interface. All components are integrated through WebSocket connections and follow modern web development best practices.
+
+---
+
+_**User**_
+
+update docs and write your 2-handoff.md prompt for the next ai developer
 
 ---
 
