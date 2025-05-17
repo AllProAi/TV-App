@@ -14,23 +14,28 @@ const openai = new OpenAI({
  */
 async function generateResponse(query, subtitles = [], options = {}) {
   try {
+    // Find relevant subtitles based on query
+    const relevantSubtitles = options.timestamp 
+      ? getSubtitlesAroundTimestamp(subtitles, options.timestamp, options.contextWindow || 60)
+      : findRelevantSubtitles(query, subtitles, options.maxContext || 20);
+    
     // Format subtitles as context
-    const subtitleContext = subtitles
-      .map(s => `[${formatTimestamp(s.timestamp)}] ${s.text}`)
+    const subtitleContext = relevantSubtitles
+      .map(s => `[${formatTimestamp(s.timestamp || s.start * 1000)}] ${s.text}`)
       .join('\n');
     
     // Create system prompt with instructions
-    const systemPrompt = `You are MemoryStream AI, an assistant that answers questions about TV content based on subtitles. 
-You have access to the following subtitle text from the content the user is watching:
+    const systemPrompt = `You are MemoryStream AI, an assistant that answers questions about TV content based on dialogue. 
+You have access to the following transcript from the content the user is watching:
 
 ${subtitleContext}
 
 When answering:
-1. Only use information from the provided subtitles
-2. If the answer isn't in the subtitles, say "I don't have enough information from what I've seen so far"
+1. Only use information from the provided transcript
+2. If the answer isn't in the transcript, say "I don't have enough information from what I've seen so far"
 3. Reference specific timestamps when possible
 4. Keep responses concise and informative
-5. Don't mention that you're working with "subtitles" - refer to it as "what I've seen" or "what was said"`;
+5. Don't mention that you're working with "subtitles" or "transcript" - refer to it as "what I've seen" or "what was said"`;
 
     // Call GPT
     const completion = await openai.chat.completions.create({
@@ -47,7 +52,10 @@ When answering:
     return {
       timestamp: Date.now(),
       text: completion.choices[0].message.content,
-      sources: identifySourceSubtitles(completion.choices[0].message.content, subtitles)
+      sources: relevantSubtitles.map(s => ({
+        timestamp: s.timestamp || s.start * 1000,
+        text: s.text
+      }))
     };
   } catch (error) {
     console.error('GPT response generation error:', error);
@@ -67,11 +75,14 @@ async function processCommand(command) {
 Analyze the user's voice command and determine the appropriate action.
 Response must be a valid JSON object with the following structure:
 {
-  "action": "play|pause|rewind|forward|volume_up|volume_down|search|answer|none",
-  "parameters": {}, // Additional parameters if needed
+  "action": "play|pause|rewind|forward|volume_up|volume_down|mute|search|answer|subtitle_on|subtitle_off|none",
+  "parameters": {}, // Additional parameters if needed (e.g. {"seconds": 30} for forward/rewind)
   "confidence": 0.95, // How confident you are that this is the correct action
   "clarification": "" // If confidence is low, suggest clarification
-}`;
+}
+
+For search commands, include a "query" parameter with the search term.
+For example: {"action": "search", "parameters": {"query": "who is the murderer"}}`;
 
     // Call GPT to interpret the command
     const completion = await openai.chat.completions.create({
@@ -114,16 +125,16 @@ async function generateSummary(subtitles, options = {}) {
   try {
     // Format subtitles as context
     const subtitleContext = subtitles
-      .map(s => `[${formatTimestamp(s.timestamp)}] ${s.text}`)
+      .map(s => `[${formatTimestamp(s.timestamp || s.start * 1000)}] ${s.text}`)
       .join('\n');
     
     // Create system prompt with instructions
     const systemPrompt = `You are a content summarization expert.
-Based on the following subtitles from a TV show or movie, generate a concise summary.
+Based on the following transcript from a TV show or movie, generate a concise summary.
 Focus on key plot points, main characters, and significant events.
 The summary should be approximately ${options.length || 3} paragraphs.
 
-SUBTITLES:
+TRANSCRIPT:
 ${subtitleContext}`;
 
     // Call GPT
@@ -151,6 +162,80 @@ ${subtitleContext}`;
 }
 
 /**
+ * Search subtitles for a specific query
+ * @param {string} query - Search query
+ * @param {Array} subtitles - Array of subtitle objects
+ * @returns {Promise<Object>} - Search results
+ */
+async function searchSubtitles(query, subtitles) {
+  try {
+    // First find potentially relevant subtitles using simple keyword matching
+    const potentialMatches = findRelevantSubtitles(query, subtitles, 30);
+    
+    if (potentialMatches.length === 0) {
+      return {
+        timestamp: Date.now(),
+        results: [],
+        query
+      };
+    }
+    
+    // Format subtitle context for semantic search
+    const subtitleContext = potentialMatches
+      .map(s => `[${formatTimestamp(s.timestamp || s.start * 1000)}] ${s.text}`)
+      .join('\n');
+    
+    // Create system prompt for semantic search
+    const systemPrompt = `You are a semantic search engine for TV content.
+Based on the user's query and the following transcript excerpts, identify the most relevant moments.
+Return a JSON array of objects containing:
+1. The timestamp string [MM:SS]
+2. The text of the transcript
+3. A relevance score (0-1) indicating how relevant this moment is to the query
+
+Return only the timestamp sections that are truly relevant to the query. If none are relevant, return an empty array.`;
+
+    // Call GPT for semantic search
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Query: "${query}"\n\nTranscript excerpts:\n${subtitleContext}` }
+      ],
+      temperature: 0.1,
+      max_tokens: 500,
+      response_format: { type: "json_object" }
+    });
+
+    // Parse results
+    const results = JSON.parse(completion.choices[0].message.content);
+    
+    return {
+      timestamp: Date.now(),
+      results: Array.isArray(results) ? results : (results.results || []),
+      query
+    };
+  } catch (error) {
+    console.error('Subtitle search error:', error);
+    
+    // Fallback to simple keyword search if GPT fails
+    const fallbackResults = findRelevantSubtitles(query, subtitles, 5)
+      .map(s => ({
+        timestamp: formatTimestamp(s.timestamp || s.start * 1000),
+        text: s.text,
+        relevance: 0.5
+      }));
+    
+    return {
+      timestamp: Date.now(),
+      results: fallbackResults,
+      query,
+      fallback: true
+    };
+  }
+}
+
+/**
  * Format timestamp as readable time
  * @param {number} timestamp - Timestamp in milliseconds
  * @returns {string} - Formatted time string (MM:SS)
@@ -158,10 +243,65 @@ ${subtitleContext}`;
 function formatTimestamp(timestamp) {
   if (typeof timestamp !== 'number') return '00:00';
   
-  const date = new Date(timestamp);
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  const seconds = date.getSeconds().toString().padStart(2, '0');
+  const totalSeconds = Math.floor(timestamp / 1000);
+  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+  const seconds = (totalSeconds % 60).toString().padStart(2, '0');
   return `${minutes}:${seconds}`;
+}
+
+/**
+ * Get subtitles around a specific timestamp
+ * @param {Array} subtitles - Array of subtitle objects
+ * @param {number} timestamp - Timestamp in milliseconds
+ * @param {number} contextWindow - Context window in seconds (half before, half after)
+ * @returns {Array} - Subtitles within the context window
+ */
+function getSubtitlesAroundTimestamp(subtitles, timestamp, contextWindow = 60) {
+  const halfWindowMs = (contextWindow / 2) * 1000;
+  const startTime = timestamp - halfWindowMs;
+  const endTime = timestamp + halfWindowMs;
+  
+  return subtitles.filter(subtitle => {
+    const subtitleTime = subtitle.timestamp || subtitle.start * 1000;
+    return subtitleTime >= startTime && subtitleTime <= endTime;
+  }).sort((a, b) => {
+    return (a.timestamp || a.start * 1000) - (b.timestamp || b.start * 1000);
+  });
+}
+
+/**
+ * Find subtitles relevant to a query using simple keyword matching
+ * @param {string} query - Search query
+ * @param {Array} subtitles - Array of subtitle objects
+ * @param {number} maxResults - Maximum number of results to return
+ * @returns {Array} - Relevant subtitles
+ */
+function findRelevantSubtitles(query, subtitles, maxResults = 20) {
+  // Convert query to lowercase and split into tokens
+  const queryTokens = query.toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
+    .split(/\s+/)
+    .filter(token => token.length > 2);
+  
+  // Score each subtitle based on token matches
+  const scoredSubtitles = subtitles.map(subtitle => {
+    const text = subtitle.text.toLowerCase();
+    let score = 0;
+    
+    queryTokens.forEach(token => {
+      if (text.includes(token)) {
+        score += 1;
+      }
+    });
+    
+    return { ...subtitle, relevanceScore: score };
+  });
+  
+  // Sort by relevance score (descending) and take top results
+  return scoredSubtitles
+    .filter(s => s.relevanceScore > 0)
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .slice(0, maxResults);
 }
 
 /**
@@ -190,5 +330,8 @@ function identifySourceSubtitles(response, subtitles) {
 module.exports = {
   generateResponse,
   processCommand,
-  generateSummary
+  generateSummary,
+  searchSubtitles,
+  getSubtitlesAroundTimestamp,
+  findRelevantSubtitles
 }; 

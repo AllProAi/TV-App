@@ -16,6 +16,14 @@ async function createSession(options = {}) {
     created: new Date(),
     expires: new Date(Date.now() + (options.duration || 24 * 60 * 60 * 1000)), // Default 24 hours
     subtitles: [],
+    queries: [], // Track user queries and responses
+    contextMetadata: {}, // Content-specific metadata
+    videoState: {
+      currentTime: 0,
+      duration: 0,
+      playing: false,
+      lastUpdated: Date.now()
+    },
     connected: {
       tv: false,
       mobile: []
@@ -23,12 +31,16 @@ async function createSession(options = {}) {
     settings: {
       subtitlesEnabled: true,
       aiAssistantEnabled: true,
+      voiceCommandsEnabled: true,
+      subtitleLanguage: options.language || 'en',
+      showSubtitlesOnTV: true,
       ...options.settings
     },
     content: options.content || {
       title: "Demo Content",
       source: "https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd",
-      type: "application/dash+xml"
+      type: "application/dash+xml",
+      metadata: {}
     }
   };
   
@@ -36,7 +48,7 @@ async function createSession(options = {}) {
   sessions[sessionId] = session;
   
   // Generate QR code for mobile pairing
-  const baseUrl = process.env.MOBILE_APP_URL || 'https://memorystream-mobile.example.com';
+  const baseUrl = process.env.MOBILE_APP_URL || 'http://localhost:8081';
   const pairingUrl = `${baseUrl}?session=${sessionId}`;
   const qrCode = await QRCode.toDataURL(pairingUrl);
   
@@ -45,7 +57,8 @@ async function createSession(options = {}) {
     pairingUrl,
     qrCode,
     expires: session.expires,
-    content: session.content
+    content: session.content,
+    settings: session.settings
   };
 }
 
@@ -95,6 +108,21 @@ function updateSession(sessionId, updates) {
     };
   }
   
+  if (updates.videoState) {
+    session.videoState = {
+      ...session.videoState,
+      ...updates.videoState,
+      lastUpdated: Date.now()
+    };
+  }
+  
+  if (updates.contextMetadata) {
+    session.contextMetadata = {
+      ...session.contextMetadata,
+      ...updates.contextMetadata
+    };
+  }
+  
   if (updates.expires) {
     session.expires = new Date(updates.expires);
   }
@@ -125,15 +153,65 @@ function addSubtitle(sessionId, subtitle) {
   
   if (!session) return false;
   
-  session.subtitles.push({
+  // Ensure subtitle has required fields
+  const processedSubtitle = {
     ...subtitle,
-    timestamp: subtitle.timestamp || Date.now()
-  });
+    timestamp: subtitle.timestamp || Date.now(),
+    videoTimestamp: subtitle.videoTimestamp || session.videoState.currentTime,
+    id: subtitle.id || `sub-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+  };
+  
+  session.subtitles.push(processedSubtitle);
   
   // Optionally limit the number of stored subtitles to prevent memory bloat
   if (session.subtitles.length > 1000) {
     session.subtitles = session.subtitles.slice(-1000);
   }
+  
+  return true;
+}
+
+/**
+ * Track user query and AI response
+ * @param {string} sessionId - Session ID
+ * @param {Object} interaction - Query and response data
+ * @returns {boolean} - Success status
+ */
+function trackInteraction(sessionId, interaction) {
+  const session = sessions[sessionId];
+  
+  if (!session) return false;
+  
+  session.queries.push({
+    ...interaction,
+    timestamp: interaction.timestamp || Date.now(),
+    videoTimestamp: interaction.videoTimestamp || session.videoState.currentTime
+  });
+  
+  // Limit stored queries
+  if (session.queries.length > 100) {
+    session.queries = session.queries.slice(-100);
+  }
+  
+  return true;
+}
+
+/**
+ * Update video playback state
+ * @param {string} sessionId - Session ID
+ * @param {Object} state - Video state information
+ * @returns {boolean} - Success status
+ */
+function updateVideoState(sessionId, state) {
+  const session = sessions[sessionId];
+  
+  if (!session) return false;
+  
+  session.videoState = {
+    ...session.videoState,
+    ...state,
+    lastUpdated: Date.now()
+  };
   
   return true;
 }
@@ -156,6 +234,14 @@ function searchSubtitles(sessionId, criteria) {
     results = results.filter(subtitle => 
       subtitle.timestamp >= criteria.startTime && 
       subtitle.timestamp <= criteria.endTime
+    );
+  }
+  
+  // Filter by video timestamp range
+  if (criteria.videoStartTime !== undefined && criteria.videoEndTime !== undefined) {
+    results = results.filter(subtitle => 
+      subtitle.videoTimestamp >= criteria.videoStartTime && 
+      subtitle.videoTimestamp <= criteria.videoEndTime
     );
   }
   
@@ -183,6 +269,8 @@ function searchSubtitles(sessionId, criteria) {
       
       return bRelevance - aRelevance; // Higher relevance first
     });
+  } else if (criteria.sortBy === 'videoTimestamp') {
+    results.sort((a, b) => a.videoTimestamp - b.videoTimestamp);
   } else {
     // Default sort by timestamp
     results.sort((a, b) => a.timestamp - b.timestamp);
@@ -194,6 +282,30 @@ function searchSubtitles(sessionId, criteria) {
   }
   
   return results;
+}
+
+/**
+ * Get subtitles around a specific video timestamp
+ * @param {string} sessionId - Session ID
+ * @param {number} videoTimestamp - Video timestamp in seconds
+ * @param {number} windowSize - Window size in seconds (default: 60)
+ * @returns {Array} - Subtitles within the window
+ */
+function getSubtitlesAroundVideoTime(sessionId, videoTimestamp, windowSize = 60) {
+  const session = sessions[sessionId];
+  
+  if (!session) return [];
+  
+  const halfWindow = windowSize / 2;
+  const startTime = Math.max(0, videoTimestamp - halfWindow);
+  const endTime = videoTimestamp + halfWindow;
+  
+  return session.subtitles
+    .filter(subtitle => 
+      subtitle.videoTimestamp >= startTime && 
+      subtitle.videoTimestamp <= endTime
+    )
+    .sort((a, b) => a.videoTimestamp - b.videoTimestamp);
 }
 
 /**
@@ -210,6 +322,15 @@ function updateConnectionStatus(sessionId, clientType, connectionInfo) {
   
   if (clientType === 'tv') {
     session.connected.tv = connectionInfo.connected !== false;
+    
+    // Update TV metadata if provided
+    if (connectionInfo.tvInfo) {
+      session.connected.tvInfo = {
+        ...session.connected.tvInfo || {},
+        ...connectionInfo.tvInfo,
+        lastUpdate: Date.now()
+      };
+    }
   } else if (clientType === 'mobile') {
     const { socketId, connected, deviceInfo } = connectionInfo;
     
@@ -227,11 +348,13 @@ function updateConnectionStatus(sessionId, clientType, connectionInfo) {
       if (existingClient) {
         existingClient.deviceInfo = deviceInfo || existingClient.deviceInfo;
         existingClient.connected = true;
+        existingClient.lastSeen = Date.now();
       } else {
         session.connected.mobile.push({
           socketId,
           deviceInfo: deviceInfo || { type: 'unknown' },
-          connected: true
+          connected: true,
+          lastSeen: Date.now()
         });
       }
     }
@@ -254,11 +377,29 @@ function getActiveSessions() {
       created: session.created,
       expires: session.expires,
       contentTitle: session.content?.title,
+      subtitleCount: session.subtitles.length,
       connectedClients: {
         tv: session.connected.tv ? 1 : 0,
         mobile: session.connected.mobile.length
       }
     }));
+}
+
+/**
+ * Extend session expiration time
+ * @param {string} sessionId - Session ID
+ * @param {number} durationMs - Additional time in milliseconds
+ * @returns {boolean} - Success status
+ */
+function extendSession(sessionId, durationMs = 60 * 60 * 1000) { // Default: 1 hour
+  const session = sessions[sessionId];
+  
+  if (!session) return false;
+  
+  const currentExpiry = new Date(session.expires).getTime();
+  session.expires = new Date(currentExpiry + durationMs);
+  
+  return true;
 }
 
 // Clean up expired sessions periodically
@@ -278,9 +419,13 @@ module.exports = {
   updateSession,
   deleteSession,
   addSubtitle,
+  trackInteraction,
+  updateVideoState,
   searchSubtitles,
+  getSubtitlesAroundVideoTime,
   updateConnectionStatus,
   getActiveSessions,
+  extendSession,
   // Expose sessions for direct access from index.js
   getSessions: () => sessions
 }; 

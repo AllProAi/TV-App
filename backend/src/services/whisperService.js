@@ -1,4 +1,7 @@
 const { OpenAI } = require('openai');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -13,40 +16,82 @@ const openai = new OpenAI({
  */
 async function transcribe(audioData, options = {}) {
   try {
-    // For demo purposes, create a temporary file from the audio data
-    // In production, handle this more efficiently
-    const tempFilePath = `/tmp/audio-${Date.now()}.wav`;
+    // Create temporary file name
+    const tempDir = os.tmpdir();
+    const tempFilePath = path.join(tempDir, `audio-${Date.now()}.webm`);
     
-    // Convert audioData to format Whisper accepts
-    // This is simplified for the demo - actual implementation would depend on
-    // how audio is being captured and streamed from the client
+    // Convert audioData to a file
+    let fileBuffer;
+    if (typeof audioData === 'string') {
+      // Handle base64 string
+      if (audioData.startsWith('data:audio')) {
+        // Extract base64 data from data URL
+        const base64Data = audioData.split(',')[1];
+        fileBuffer = Buffer.from(base64Data, 'base64');
+      } else {
+        // Assume it's already base64
+        fileBuffer = Buffer.from(audioData, 'base64');
+      }
+    } else if (Buffer.isBuffer(audioData)) {
+      // Already a buffer
+      fileBuffer = audioData;
+    } else {
+      throw new Error('Invalid audio data format. Expected Buffer or base64 string.');
+    }
+    
+    // Write buffer to temp file
+    fs.writeFileSync(tempFilePath, fileBuffer);
     
     // Call Whisper API
     const transcription = await openai.audio.transcriptions.create({
-      file: tempFilePath, // In real implementation, handle file creation properly
+      file: fs.createReadStream(tempFilePath),
       model: "whisper-1",
       language: options.language || "en",
       temperature: options.temperature || 0,
       response_format: "verbose_json"
     });
     
+    // Delete temp file
+    try {
+      fs.unlinkSync(tempFilePath);
+    } catch (err) {
+      console.warn(`Failed to delete temp file ${tempFilePath}:`, err);
+    }
+    
     // Parse and format the result
     return {
       timestamp: Date.now(),
       text: transcription.text,
-      segments: transcription.segments.map(segment => ({
+      segments: transcription.segments?.map(segment => ({
         start: segment.start,
         end: segment.end,
         text: segment.text,
         confidence: segment.confidence
-      })),
+      })) || [],
       language: transcription.language,
-      confidence: calculateAverageConfidence(transcription.segments)
+      confidence: calculateAverageConfidence(transcription.segments || [])
     };
   } catch (error) {
     console.error('Whisper transcription error:', error);
     throw error;
   }
+}
+
+/**
+ * Process audio chunks for real-time transcription
+ * @param {Buffer|string} audioChunk - Audio chunk data
+ * @param {string} sessionId - Session identifier for tracking context
+ * @param {Object} options - Transcription options
+ * @returns {Promise<Object>} - Transcription result
+ */
+async function transcribeRealtime(audioChunk, sessionId, options = {}) {
+  // This is a simplified version for the demo
+  // In a production system, we would:
+  // 1. Buffer audio chunks until we have enough for meaningful transcription
+  // 2. Maintain session context for continuity between chunks
+  // 3. Handle overlapping transcriptions for smoother experience
+  
+  return transcribe(audioChunk, options);
 }
 
 /**
@@ -57,7 +102,7 @@ async function transcribe(audioData, options = {}) {
 function calculateAverageConfidence(segments) {
   if (!segments || segments.length === 0) return 0;
   
-  const sum = segments.reduce((total, segment) => total + segment.confidence, 0);
+  const sum = segments.reduce((total, segment) => total + (segment.confidence || 0), 0);
   return sum / segments.length;
 }
 
@@ -93,5 +138,6 @@ function identifySpeakers(segments) {
 
 module.exports = {
   transcribe,
+  transcribeRealtime,
   identifySpeakers
 }; 
