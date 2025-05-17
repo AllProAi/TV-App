@@ -1,7 +1,9 @@
 import shaka from 'shaka-player';
+import * as senza from 'senza-sdk';
 
 /**
  * VideoPlayer component for handling video playback with Shaka Player
+ * Integrates with Senza platform when available
  */
 class VideoPlayer {
   /**
@@ -16,42 +18,29 @@ class VideoPlayer {
       contentType: options.contentType || 'application/dash+xml',
       autoPlay: options.autoPlay !== false,
       startMuted: options.startMuted || false,
+      useSenzaPlayer: options.useSenzaPlayer !== false,
       ...options
     };
     
     this.player = null;
+    this.senzaPlayerEnabled = false;
     this.eventListeners = {};
     
     this.initialize();
   }
   
   /**
-   * Initialize the Shaka Player
+   * Initialize the player (Senza or Shaka)
    */
   async initialize() {
     try {
-      // Install polyfills
-      shaka.polyfill.installAll();
-      
-      // Check browser support
-      if (!shaka.Player.isBrowserSupported()) {
-        throw new Error('Browser not supported for Shaka Player');
+      // Try to use Senza player if available
+      if (this.options.useSenzaPlayer && typeof senza !== 'undefined' && senza.player) {
+        await this.initializeSenzaPlayer();
+      } else {
+        // Fall back to Shaka player
+        await this.initializeShakaPlayer();
       }
-      
-      // Create player instance
-      this.player = new shaka.Player(this.videoElement);
-      
-      // Listen for errors
-      this.player.addEventListener('error', this.onError.bind(this));
-      
-      // Configure player
-      this.player.configure({
-        streaming: {
-          bufferingGoal: 30,
-          rebufferingGoal: 2,
-          bufferBehind: 30
-        }
-      });
       
       // Set up video element event listeners
       this.setupEventListeners();
@@ -72,6 +61,87 @@ class VideoPlayer {
       this.triggerEvent('error', error);
     }
   }
+
+  /**
+   * Initialize Senza platform player
+   */
+  async initializeSenzaPlayer() {
+    try {
+      console.log('Initializing Senza platform player');
+      
+      // Register media player with Senza
+      senza.player.registerMediaElement(this.videoElement);
+      
+      // Set up Senza player event listeners
+      senza.player.addEventListener('error', this.onError.bind(this));
+      senza.player.addEventListener('statechange', this.onSenzaStateChange.bind(this));
+      
+      this.senzaPlayerEnabled = true;
+      console.log('Senza player initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize Senza player:', error);
+      console.warn('Falling back to Shaka player');
+      // Fall back to Shaka player
+      await this.initializeShakaPlayer();
+    }
+  }
+  
+  /**
+   * Initialize Shaka Player
+   */
+  async initializeShakaPlayer() {
+    // Install polyfills
+    shaka.polyfill.installAll();
+    
+    // Check browser support
+    if (!shaka.Player.isBrowserSupported()) {
+      throw new Error('Browser not supported for Shaka Player');
+    }
+    
+    // Create player instance
+    this.player = new shaka.Player(this.videoElement);
+    
+    // Listen for errors
+    this.player.addEventListener('error', this.onError.bind(this));
+    
+    // Configure player
+    this.player.configure({
+      streaming: {
+        bufferingGoal: 30,
+        rebufferingGoal: 2,
+        bufferBehind: 30
+      }
+    });
+    
+    console.log('Shaka player initialized successfully');
+  }
+
+  /**
+   * Handle Senza player state changes
+   * @param {Event} event - State change event
+   */
+  onSenzaStateChange(event) {
+    const state = event.detail.state;
+    console.log('Senza player state changed:', state);
+    
+    switch (state) {
+      case 'playing':
+        this.triggerEvent('play');
+        break;
+      case 'paused':
+        this.triggerEvent('pause');
+        break;
+      case 'ended':
+        this.triggerEvent('ended');
+        break;
+      case 'buffering':
+        this.triggerEvent('buffering', true);
+        break;
+      case 'ready':
+        this.triggerEvent('buffering', false);
+        break;
+    }
+  }
   
   /**
    * Load content into the player
@@ -82,8 +152,16 @@ class VideoPlayer {
     try {
       this.triggerEvent('loading', { url, mimeType });
       
-      // Load manifest
-      await this.player.load(url, null, mimeType);
+      if (this.senzaPlayerEnabled) {
+        // Load content using Senza player
+        await senza.player.load({
+          url: url,
+          type: mimeType
+        });
+      } else {
+        // Load content using Shaka player
+        await this.player.load(url, null, mimeType);
+      }
       
       this.triggerEvent('loaded', {
         url,
@@ -199,11 +277,10 @@ class VideoPlayer {
    * Play the video
    */
   play() {
-    try {
-      return this.videoElement.play();
-    } catch (error) {
-      console.error('Play error:', error);
-      this.triggerEvent('error', error);
+    if (this.senzaPlayerEnabled) {
+      senza.player.play();
+    } else {
+      this.videoElement.play();
     }
   }
   
@@ -211,17 +288,21 @@ class VideoPlayer {
    * Pause the video
    */
   pause() {
-    this.videoElement.pause();
+    if (this.senzaPlayerEnabled) {
+      senza.player.pause();
+    } else {
+      this.videoElement.pause();
+    }
   }
   
   /**
    * Toggle between play and pause
    */
   togglePlayPause() {
-    if (this.videoElement.paused) {
-      this.play();
-    } else {
+    if (this.isPlaying()) {
       this.pause();
+    } else {
+      this.play();
     }
   }
   
@@ -231,25 +312,35 @@ class VideoPlayer {
    */
   seekTo(time) {
     try {
-      this.videoElement.currentTime = time;
-      this.triggerEvent('seek', time);
+      const duration = this.getDuration();
+      const safeTime = Math.max(0, Math.min(time, duration));
+      
+      if (this.senzaPlayerEnabled) {
+        senza.player.seek(safeTime);
+      } else {
+        this.videoElement.currentTime = safeTime;
+      }
+      
+      this.triggerEvent('seek', { time: safeTime });
     } catch (error) {
       console.error('Seek error:', error);
-      this.triggerEvent('error', error);
     }
   }
   
   /**
-   * Seek by a relative amount of seconds
-   * @param {number} seconds - Number of seconds to seek by (positive or negative)
+   * Seek by a relative amount
+   * @param {number} seconds - Seconds to seek forward (positive) or backward (negative)
    */
   seekBy(seconds) {
-    const newTime = Math.max(0, Math.min(
-      this.videoElement.currentTime + seconds,
-      this.videoElement.duration || Infinity
-    ));
-    
-    this.seekTo(newTime);
+    try {
+      const currentTime = this.getCurrentTime();
+      const duration = this.getDuration();
+      const newTime = Math.max(0, Math.min(currentTime + seconds, duration));
+      
+      this.seekTo(newTime);
+    } catch (error) {
+      console.error('Seek error:', error);
+    }
   }
   
   /**
@@ -257,38 +348,51 @@ class VideoPlayer {
    * @param {number} level - Volume level (0-1)
    */
   setVolume(level) {
-    const volume = Math.max(0, Math.min(1, level));
-    this.videoElement.volume = volume;
-    this.triggerEvent('volumechange', volume);
+    const safeLevel = Math.max(0, Math.min(level, 1));
+    
+    if (this.senzaPlayerEnabled) {
+      senza.player.setVolume(safeLevel);
+    } 
+    
+    this.videoElement.volume = safeLevel;
+    this.triggerEvent('volumechange', { level: safeLevel });
   }
   
   /**
-   * Increase volume by a specified amount
-   * @param {number} amount - Amount to increase (default: 0.1)
+   * Increase volume
+   * @param {number} amount - Amount to increase (0-1)
    */
   increaseVolume(amount = 0.1) {
-    this.setVolume(this.videoElement.volume + amount);
+    const newVolume = Math.min(this.videoElement.volume + amount, 1);
+    this.setVolume(newVolume);
   }
   
   /**
-   * Decrease volume by a specified amount
-   * @param {number} amount - Amount to decrease (default: 0.1)
+   * Decrease volume
+   * @param {number} amount - Amount to decrease (0-1)
    */
   decreaseVolume(amount = 0.1) {
-    this.setVolume(this.videoElement.volume - amount);
+    const newVolume = Math.max(this.videoElement.volume - amount, 0);
+    this.setVolume(newVolume);
   }
   
   /**
    * Toggle mute state
    */
   toggleMute() {
-    this.videoElement.muted = !this.videoElement.muted;
-    this.triggerEvent('mutechange', this.videoElement.muted);
+    const newState = !this.videoElement.muted;
+    
+    if (this.senzaPlayerEnabled) {
+      senza.player.setMuted(newState);
+    }
+    
+    this.videoElement.muted = newState;
+    this.triggerEvent('mutechange', { muted: newState });
   }
   
   /**
-   * Check if player is currently playing
-   * @returns {boolean} - True if playing
+   * Check if video is currently playing
+   * @return {boolean} Is playing
    */
   isPlaying() {
     return !this.videoElement.paused;
@@ -296,7 +400,7 @@ class VideoPlayer {
   
   /**
    * Get current playback time
-   * @returns {number} - Current time in seconds
+   * @return {number} Current time in seconds
    */
   getCurrentTime() {
     return this.videoElement.currentTime;
@@ -304,23 +408,35 @@ class VideoPlayer {
   
   /**
    * Get video duration
-   * @returns {number} - Duration in seconds
+   * @return {number} Duration in seconds
    */
   getDuration() {
-    return this.videoElement.duration;
+    return this.videoElement.duration || 0;
   }
   
   /**
-   * Destroy the player and clean up resources
+   * Clean up and release resources
    */
   destroy() {
-    if (this.player) {
-      this.player.destroy();
-      this.player = null;
+    // Remove event listeners
+    this.eventListeners = {};
+    
+    // Destroy player instance
+    if (this.senzaPlayerEnabled) {
+      try {
+        senza.player.unregisterMediaElement(this.videoElement);
+      } catch (error) {
+        console.error('Error unregistering from Senza player:', error);
+      }
+    } else if (this.player) {
+      try {
+        this.player.destroy();
+      } catch (error) {
+        console.error('Error destroying Shaka player:', error);
+      }
     }
     
-    // Remove all event listeners
-    this.eventListeners = {};
+    this.player = null;
   }
 }
 

@@ -228,7 +228,12 @@ For a production deployment, follow these steps:
      BACKEND_URL=https://your-backend-url pnpm run build
      ```
    - Deploy the contents of the `tv-app/dist` directory to a static web server or CDN
-   - For Senza platform deployment, follow their specific deployment guidelines
+   - For Senza platform deployment, follow their specific deployment guidelines:
+     1. Ensure the Senza SDK is properly integrated (already included in the build)
+     2. Configure app metadata in `/tv-app/public/index.html` according to Senza requirements
+     3. Register your application in the Senza Developer Portal if required
+     4. Package your application according to Senza submission guidelines
+     5. Submit your app package through the Senza Developer Portal
    - Configure proper caching headers for static assets:
      - Long cache time for versioned assets (JS/CSS with hashes)
      - Short cache time for HTML and configuration files
@@ -251,6 +256,42 @@ For a production deployment, follow these steps:
          }
      }
      ```
+
+### Senza Platform Specific Notes
+
+For successful deployment to the Senza platform, ensure the following:
+
+1. **SDK Integration**:
+   - The Senza SDK is included in the package.json dependencies
+   - The app properly initializes the SDK at startup:
+     ```javascript
+     import * as senza from 'senza-sdk';
+     
+     // Initialize Senza platform
+     await senza.init();
+     senza.uiReady();
+     ```
+   - Video element has the required attribute: `data-senza-media-element="true"`
+
+2. **Metadata Configuration**:
+   - The HTML includes required meta tags:
+     ```html
+     <meta name="application-name" content="MemoryStream">
+     <meta name="application-version" content="0.1.0">
+     <meta name="senza-app-type" content="streaming">
+     ```
+   - App container has the required attribute: `data-senza-app="MemoryStream"`
+
+3. **Submission Package**:
+   - Create a ZIP file containing the contents of the `tv-app/dist` directory
+   - Include a manifest.json file with application metadata if required by Senza
+   - Ensure all assets are included in the package
+   - Test the application thoroughly in the Senza emulator before submission
+
+4. **Platform Features Utilization**:
+   - The VideoPlayer component is designed to use Senza player when available
+   - Fallback to Shaka player when running outside the Senza environment
+   - All media controls properly integrate with both Senza and standard players
 
 3. **Mobile App Deployment**:
    - Build the app with the correct backend URL:

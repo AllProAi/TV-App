@@ -614,3 +614,52 @@ what meta data from adk is availbel we can use websearch gpt to find info about 
 
 ---
 
+_**Assistant**_
+
+
+
+---
+
+<details>
+            <summary>Searched web "Synamedia Senza platform API SDK metadata available content information" • **6** results</summary>
+        
+| Title | URL |
+|-------|-----|
+| Synamedia Senza - Any Screen. Without Limits. | https://www.synamedia.com/product/senza/ |
+| SDK Release Notes | https://developer.synamedia.com/senza/docs/sdk-release-notes |
+| Synamedia unveils the Senza network of innovation ... | https://www.synamedia.com/blog/synamedia-unveils-the-senza-network-of-innovation-developer-and-reseller-partners/ |
+| CTAM_Infographic_Medadata_r7 | https://www.ctam.com/wp-content/uploads/CTAM_Infographic_Metadata_Final-3.pdf?access_pid=NjcjNWVmMjRhNjRkNjM5Mg |
+| Enrich | https://www.synamedia.com/enrich/ |
+| Common Metadata - MovieLabs | https://movielabs.com/md/md/ |
+
+</details>
+
+---
+
+
+
+---
+
+<details>
+            <summary>Searched web "Senza TV platform SDK metadata API content information show episode season" • **5** results</summary>
+        
+| Title | URL |
+|-------|-----|
+| Respect the user's DisplayMissingEpisodes setting in TV ... | https://github.com/jellyfin/jellyfin-androidtv/issues/3717 |
+| SDK Release Notes | https://developer.synamedia.com/senza/docs/sdk-release-notes |
+| Mediagenix On-Demand - Developers \| Bebanjo metadata api: Series | https://docs.bebanjo.com/bebanjo-metadata-api/series |
+| Program Metadata | https://developer.tmsapi.com/page/Program_Metadata |
+| Metadata | https://business.tivo.com/products-solutions/metadata |
+
+</details>
+
+---
+
+
+
+---
+
+
+
+---
+

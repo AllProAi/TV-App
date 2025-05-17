@@ -6,12 +6,17 @@
   "scripts": {
     "start": "webpack serve --mode development",
     "build": "webpack --mode production",
+    "build:dev": "webpack --mode development",
     "lint": "eslint src/**/*.js"
   },
   "dependencies": {
     "qrcode": "^1.5.3",
+    "senza-sdk": "^4.2.54",
     "shaka-player": "^4.3.6",
-    "socket.io-client": "^4.7.2"
+    "socket.io-client": "^4.7.2",
+    "dashjs": "^4.7.2",
+    "hls.js": "^1.4.12",
+    "web-vitals": "^3.4.0"
   },
   "devDependencies": {
     "copy-webpack-plugin": "^11.0.0",

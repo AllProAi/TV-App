@@ -5,9 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MemoryStream TV</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+  <!-- Senza SDK alternative loading (used as fallback) -->
+  <script src="https://senza-sdk.streaming.synamedia.com/latest/bundle.js" defer></script>
+  
+  <!-- Senza platform app metadata -->
+  <meta name="application-name" content="MemoryStream">
+  <meta name="application-version" content="0.1.0">
+  <meta name="senza-app-type" content="streaming">
 </head>
 <body>
-  <div id="app">
+  <div id="app" data-senza-app="MemoryStream">
     <!-- Main App Container -->
     <div id="loading-screen" class="fullscreen-overlay">
       <div class="loading-content">
@@ -32,7 +39,7 @@
     
     <!-- Video Player Container -->
     <div id="video-container">
-      <video id="video-player" autoplay></video>
+      <video id="video-player" autoplay data-senza-media-element="true"></video>
       
       <!-- Subtitle Container -->
       <div id="subtitle-container"></div>

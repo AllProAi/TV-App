@@ -2,6 +2,7 @@ import './styles/main.css';
 import shaka from 'shaka-player';
 import QRCode from 'qrcode';
 import { io } from 'socket.io-client';
+import * as senza from 'senza-sdk';
 
 // Import app modules
 import VideoPlayer from './components/VideoPlayer';
@@ -50,6 +51,9 @@ class MemoryStreamApp {
     try {
       console.log('Initializing MemoryStream TV App');
       
+      // Initialize Senza platform
+      await this.initializeSenzaPlatform();
+      
       // Check for Shaka Player support
       const shakaSupported = shaka.Player.isBrowserSupported();
       if (!shakaSupported) {
@@ -72,6 +76,27 @@ class MemoryStreamApp {
     } catch (error) {
       console.error('Failed to initialize app:', error);
       this.showError('Failed to initialize application', error.message);
+    }
+  }
+  
+  async initializeSenzaPlatform() {
+    try {
+      console.log('Initializing Senza platform...');
+      await senza.init();
+      senza.uiReady();
+      console.log('Senza platform initialized successfully');
+      
+      // Register app with Senza platform
+      senza.app.register({
+        name: 'MemoryStream',
+        version: '0.1.0',
+        type: 'streaming'
+      });
+      
+    } catch (error) {
+      console.error('Failed to initialize Senza platform:', error);
+      // Continue even if Senza fails - allows for development outside of the platform
+      console.warn('Continuing without Senza platform integration');
     }
   }
   
