@@ -2,215 +2,119 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#333333">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#181c24">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>MemoryStream Mobile</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/png" href="favicon.png">
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
 </head>
 <body>
-  <div id="app">
+  <div class="app-container">
     <!-- Scanning Screen -->
-    <div id="scanning-screen" class="screen active">
-      <div class="screen-content">
-        <div class="logo">MemoryStream</div>
-        <h2>Scan TV QR Code</h2>
-        <div class="camera-container">
-          <video id="qr-video" autoplay playsinline></video>
-          <div class="scan-region-highlight"></div>
+    <div id="scanning-screen" class="screen">
+      <div class="screen-header">
+        <h1>MemoryStream</h1>
+        <p>Connect to your TV</p>
+      </div>
+      
+      <div id="qr-scanner-container" class="qr-scanner-container">
+        <div class="scanner-overlay">
+          <div class="scanner-target"></div>
+          <div class="scanner-instructions">Point your camera at the QR code on your TV</div>
         </div>
-        <div class="scan-instructions">
-          <p>Position the QR code displayed on your TV within the highlighted area.</p>
-        </div>
-        <div class="button-container">
-          <button id="manual-connect-btn" class="secondary-btn">Manual Connect</button>
-        </div>
+      </div>
+      
+      <div class="screen-footer">
+        <button id="manual-connect-btn" class="btn btn-secondary">Enter code manually</button>
       </div>
     </div>
     
     <!-- Manual Connect Screen -->
     <div id="manual-connect-screen" class="screen">
-      <div class="screen-content">
-        <div class="logo">MemoryStream</div>
-        <h2>Connect to TV</h2>
-        <form id="manual-connect-form">
-          <div class="form-group">
-            <label for="session-id">Session ID</label>
-            <input type="text" id="session-id" placeholder="Enter the Session ID from your TV">
-          </div>
-          <div class="button-container">
-            <button type="submit" class="primary-btn">Connect</button>
-            <button type="button" id="back-to-scan-btn" class="secondary-btn">Back to Scan</button>
-          </div>
-        </form>
+      <div class="screen-header">
+        <h1>Connect Manually</h1>
       </div>
+      
+      <form id="manual-connect-form" class="connect-form">
+        <div class="form-group">
+          <label for="session-id-input">Session ID</label>
+          <input type="text" id="session-id-input" placeholder="Enter the session ID from your TV">
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Connect</button>
+          <button type="button" id="back-to-scan-btn" class="btn btn-secondary">Back to Scanner</button>
+        </div>
+      </form>
     </div>
     
     <!-- Control Screen -->
     <div id="control-screen" class="screen">
-      <div class="screen-content">
-        <div class="header">
-          <div class="logo">MemoryStream</div>
-          <div id="connection-status" class="status connected">
-            <span class="status-indicator"></span>
-            <span class="status-text">Connected</span>
-          </div>
+      <div class="screen-header">
+        <h1>MemoryStream</h1>
+        <div id="connection-status" class="connection-status">Connecting...</div>
+        <button id="disconnect-btn" class="btn btn-small btn-secondary">Disconnect</button>
+      </div>
+      
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <button class="tab-btn active" data-tab="remote-tab">Remote</button>
+        <button class="tab-btn" data-tab="voice-tab">Voice</button>
+        <button class="tab-btn" data-tab="chat-tab">Chat</button>
+      </div>
+      
+      <!-- Tab Content -->
+      <div class="tab-content">
+        <!-- Remote Tab -->
+        <div id="remote-content" class="tab-pane active">
+          <!-- This will be populated by the RemoteControl component -->
         </div>
         
-        <div class="tab-navigation">
-          <button class="tab-btn active" data-tab="remote-tab">Remote</button>
-          <button class="tab-btn" data-tab="voice-tab">Voice</button>
-          <button class="tab-btn" data-tab="chat-tab">Chat</button>
-        </div>
-        
-        <!-- Remote Control Tab -->
-        <div id="remote-tab" class="tab-content active">
-          <div class="remote-container">
-            <div class="d-pad">
-              <button id="dpad-up" class="dpad-btn up">
-                <i class="material-icons">keyboard_arrow_up</i>
-              </button>
-              <button id="dpad-left" class="dpad-btn left">
-                <i class="material-icons">keyboard_arrow_left</i>
-              </button>
-              <button id="dpad-center" class="dpad-btn center">
-                <i class="material-icons">adjust</i>
-              </button>
-              <button id="dpad-right" class="dpad-btn right">
-                <i class="material-icons">keyboard_arrow_right</i>
-              </button>
-              <button id="dpad-down" class="dpad-btn down">
-                <i class="material-icons">keyboard_arrow_down</i>
-              </button>
-            </div>
-            
-            <div class="media-controls">
-              <button id="rewind-btn" class="media-btn">
-                <i class="material-icons">fast_rewind</i>
-              </button>
-              <button id="play-pause-btn" class="media-btn">
-                <i class="material-icons">play_arrow</i>
-              </button>
-              <button id="forward-btn" class="media-btn">
-                <i class="material-icons">fast_forward</i>
-              </button>
-            </div>
-            
-            <div class="volume-controls">
-              <button id="volume-down-btn" class="volume-btn">
-                <i class="material-icons">volume_down</i>
-              </button>
-              <button id="mute-btn" class="volume-btn">
-                <i class="material-icons">volume_off</i>
-              </button>
-              <button id="volume-up-btn" class="volume-btn">
-                <i class="material-icons">volume_up</i>
-              </button>
-            </div>
-            
-            <div class="extra-controls">
-              <button id="back-btn" class="extra-btn">
-                <i class="material-icons">arrow_back</i>
-              </button>
-              <button id="home-btn" class="extra-btn">
-                <i class="material-icons">home</i>
-              </button>
-              <button id="info-btn" class="extra-btn">
-                <i class="material-icons">info</i>
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Voice Control Tab -->
-        <div id="voice-tab" class="tab-content">
-          <div class="voice-container">
-            <div class="voice-status">
-              <div id="voice-status-icon" class="voice-status-icon">
-                <i class="material-icons">mic</i>
-              </div>
-              <div id="voice-status-text" class="voice-status-text">
-                Tap microphone to start
-              </div>
-            </div>
-            
-            <button id="voice-record-btn" class="voice-record-btn">
-              <i class="material-icons">mic</i>
-            </button>
-            
-            <div class="voice-waveform">
-              <canvas id="voice-waveform-canvas"></canvas>
-            </div>
-            
-            <div class="voice-suggestions">
-              <p>Try saying:</p>
-              <ul>
-                <li>"Play" or "Pause"</li>
-                <li>"Skip forward 30 seconds"</li>
-                <li>"What happened to [character]?"</li>
-                <li>"Turn on subtitles"</li>
-              </ul>
-            </div>
-          </div>
+        <!-- Voice Tab -->
+        <div id="voice-content" class="tab-pane">
+          <!-- This will be populated by the VoiceRecorder component -->
         </div>
         
         <!-- Chat Tab -->
-        <div id="chat-tab" class="tab-content">
-          <div class="chat-container">
-            <div id="chat-messages" class="chat-messages"></div>
-            
-            <form id="chat-form" class="chat-form">
-              <input type="text" id="chat-input" placeholder="Ask about the content...">
-              <button type="submit" id="chat-send-btn">
-                <i class="material-icons">send</i>
-              </button>
-            </form>
-          </div>
+        <div id="chat-content" class="tab-pane">
+          <!-- This will be populated by the ChatInterface component -->
         </div>
       </div>
     </div>
     
     <!-- Loading Overlay -->
-    <div id="loading-overlay" class="loading-overlay">
-      <div class="spinner"></div>
-      <div class="loading-text">Connecting...</div>
+    <div id="loading-overlay" class="overlay hidden">
+      <div class="loader"></div>
+      <div class="loading-text">Loading...</div>
     </div>
     
     <!-- Error Overlay -->
-    <div id="error-overlay" class="error-overlay hidden">
-      <div class="error-content">
-        <i class="material-icons error-icon">error_outline</i>
-        <h3 id="error-title">Error</h3>
-        <p id="error-message">Something went wrong.</p>
-        <button id="error-close-btn" class="primary-btn">Dismiss</button>
+    <div id="error-overlay" class="overlay hidden">
+      <div class="error-container">
+        <h2 id="error-title">Error</h2>
+        <p id="error-message">An error occurred.</p>
+        <button id="error-close-btn" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+    
+    <!-- iOS PWA Install Prompt -->
+    <div id="ios-pwa-prompt" class="overlay hidden">
+      <div class="pwa-prompt-container">
+        <h2>Install MemoryStream</h2>
+        <p>For the best experience, add this app to your home screen:</p>
+        <ol>
+          <li>Tap the share button <span class="icon-share"></span></li>
+          <li>Scroll down and tap "Add to Home Screen"</li>
+        </ol>
+        <button id="ios-pwa-close" class="btn btn-secondary">Later</button>
       </div>
     </div>
   </div>
   
-  <!-- iOS PWA Prompt -->
-  <div id="ios-pwa-prompt" class="ios-pwa-prompt hidden">
-    <div class="prompt-content">
-      <button id="ios-pwa-close" class="prompt-close">×</button>
-      <p>Add this app to your home screen for the best experience.</p>
-      <div class="prompt-instructions">
-        <p>Tap <i class="material-icons">ios_share</i> then "Add to Home Screen"</p>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Register service worker for PWA -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js').then(registration => {
-          console.log('ServiceWorker registered: ', registration);
-        }).catch(error => {
-          console.log('ServiceWorker registration failed: ', error);
-        });
-      });
-    }
-  </script>
+  <!-- Scripts will be injected by webpack -->
 </body>
 </html> 

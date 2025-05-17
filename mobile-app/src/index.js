@@ -1,6 +1,5 @@
 import './styles/main.css';
 import { io } from 'socket.io-client';
-import QrScanner from 'qrcode-parser';
 
 // Import app components
 import QRCodeScanner from './components/QRCodeScanner';
@@ -21,8 +20,7 @@ class MemoryStreamMobileApp {
   constructor() {
     this.sessionId = null;
     this.socket = null;
-    this.connected = false;
-    this.tvConnected = false;
+    this.connectionManager = null;
     this.components = {};
     
     // DOM elements for screens
@@ -41,12 +39,19 @@ class MemoryStreamMobileApp {
       chat: document.getElementById('chat-tab')
     };
     
+    // DOM elements for tab content
+    this.tabContents = {
+      remote: document.getElementById('remote-content'),
+      voice: document.getElementById('voice-content'),
+      chat: document.getElementById('chat-content')
+    };
+    
     // Bind event handlers
     this.handleTabClick = this.handleTabClick.bind(this);
     this.handleManualConnect = this.handleManualConnect.bind(this);
     this.handleQRCodeScanned = this.handleQRCodeScanned.bind(this);
-    this.handleSocketError = this.handleSocketError.bind(this);
     this.handleErrorDismiss = this.handleErrorDismiss.bind(this);
+    this.handleDisconnect = this.handleDisconnect.bind(this);
     
     // Check for saved session
     this.checkSavedSession();
@@ -59,19 +64,48 @@ class MemoryStreamMobileApp {
     try {
       console.log('Initializing MemoryStream Mobile App');
       
-      // Initialize components
-      this.initializeComponents();
-      
       // Set up event listeners
       this.setupEventListeners();
+      
+      // Initialize components
+      this.initializeComponents();
       
       // Check for PWA installation prompts
       this.checkForPWAPrompt();
       
+      // Show initial screen based on URL parameters
+      this.checkUrlParameters();
+      
       console.log('App initialization complete');
     } catch (error) {
       console.error('Failed to initialize app:', error);
-      this.showError('Initialization Error', error.message);
+      this.showError('Initialization Error', error.message || 'Could not initialize the application');
+    }
+  }
+  
+  /**
+   * Check for session ID in URL parameters
+   */
+  checkUrlParameters() {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get('session');
+      
+      if (sessionId) {
+        console.log('Session ID found in URL:', sessionId);
+        this.connectToSession(sessionId);
+        
+        // Remove the session parameter from URL
+        const url = new URL(window.location);
+        url.searchParams.delete('session');
+        window.history.replaceState({}, '', url);
+      } else {
+        // No session in URL, show scanning screen
+        this.showScreen('scanning');
+      }
+    } catch (error) {
+      console.error('Error checking URL parameters:', error);
+      this.showScreen('scanning');
     }
   }
   
@@ -88,7 +122,6 @@ class MemoryStreamMobileApp {
         if (expiryTime > new Date()) {
           // Session still valid, try to reconnect
           this.sessionId = sessionData.sessionId;
-          this.connectToSession(this.sessionId);
           return;
         } else {
           // Session expired, remove it
@@ -108,57 +141,66 @@ class MemoryStreamMobileApp {
   initializeComponents() {
     // Initialize QR code scanner
     this.components.qrScanner = new QRCodeScanner(
-      document.getElementById('qr-video'),
-      {
-        onScan: this.handleQRCodeScanned
-      }
+      document.getElementById('qr-scanner-container'),
+      { onScan: this.handleQRCodeScanned }
     );
     
-    // Initialize connection manager (will be set after connecting)
-    this.components.connectionManager = new ConnectionManager(
-      document.getElementById('connection-status')
-    );
-    
-    // Initialize remote control (will be enabled after connecting)
-    this.components.remoteControl = new RemoteControl({
-      dpadButtons: {
-        up: document.getElementById('dpad-up'),
-        down: document.getElementById('dpad-down'),
-        left: document.getElementById('dpad-left'),
-        right: document.getElementById('dpad-right'),
-        center: document.getElementById('dpad-center')
-      },
-      mediaButtons: {
-        playPause: document.getElementById('play-pause-btn'),
-        rewind: document.getElementById('rewind-btn'),
-        forward: document.getElementById('forward-btn')
-      },
-      volumeButtons: {
-        up: document.getElementById('volume-up-btn'),
-        down: document.getElementById('volume-down-btn'),
-        mute: document.getElementById('mute-btn')
-      },
-      extraButtons: {
-        back: document.getElementById('back-btn'),
-        home: document.getElementById('home-btn'),
-        info: document.getElementById('info-btn')
-      }
+    // Initialize connection manager
+    this.connectionManager = new ConnectionManager({
+      serverUrl: config.backendUrl,
+      reconnectInterval: config.reconnectInterval,
+      io: io
     });
     
-    // Initialize voice recorder (will be enabled after connecting)
-    this.components.voiceRecorder = new VoiceRecorder(
-      document.getElementById('voice-record-btn'),
-      document.getElementById('voice-status-text'),
-      document.getElementById('voice-status-icon'),
-      document.getElementById('voice-waveform-canvas')
+    // Add connection event handlers
+    this.connectionManager.on('connected', this.handleConnected.bind(this));
+    this.connectionManager.on('disconnected', this.handleDisconnected.bind(this));
+    this.connectionManager.on('error', this.handleConnectionError.bind(this));
+    this.connectionManager.on('session:joined', this.handleSessionJoined.bind(this));
+    
+    // Connection status element
+    this.components.connectionStatus = document.getElementById('connection-status');
+  }
+  
+  /**
+   * Initialize control components after connection
+   */
+  initializeControlComponents() {
+    // Create component containers if they don't exist
+    if (!this.tabContents.remote || !this.tabContents.voice || !this.tabContents.chat) {
+      console.error('Tab content containers not found');
+      return;
+    }
+    
+    // Initialize remote control
+    this.components.remoteControl = new RemoteControl(
+      this.tabContents.remote,
+      {
+        socket: this.connectionManager.socket,
+        session: this.sessionId
+      }
     );
     
-    // Initialize chat interface (will be enabled after connecting)
-    this.components.chatInterface = new ChatInterface(
-      document.getElementById('chat-messages'),
-      document.getElementById('chat-form'),
-      document.getElementById('chat-input')
+    // Initialize voice recorder
+    this.components.voiceRecorder = new VoiceRecorder(
+      this.tabContents.voice,
+      {
+        socket: this.connectionManager.socket,
+        session: this.sessionId
+      }
     );
+    
+    // Initialize chat interface
+    this.components.chatInterface = new ChatInterface(
+      this.tabContents.chat,
+      {
+        socket: this.connectionManager.socket,
+        session: this.sessionId
+      }
+    );
+    
+    // Add welcome message to chat
+    this.components.chatInterface.addSystemMessage('Connected to TV. Ask questions about what you\'re watching!');
   }
   
   /**
@@ -173,31 +215,47 @@ class MemoryStreamMobileApp {
     
     // Manual connect form
     const manualConnectForm = document.getElementById('manual-connect-form');
-    manualConnectForm.addEventListener('submit', this.handleManualConnect);
+    if (manualConnectForm) {
+      manualConnectForm.addEventListener('submit', this.handleManualConnect);
+    }
     
     // Manual connect button
     const manualConnectBtn = document.getElementById('manual-connect-btn');
-    manualConnectBtn.addEventListener('click', () => {
-      this.showScreen('manualConnect');
-    });
+    if (manualConnectBtn) {
+      manualConnectBtn.addEventListener('click', () => {
+        this.showScreen('manualConnect');
+      });
+    }
     
     // Back to scan button
     const backToScanBtn = document.getElementById('back-to-scan-btn');
-    backToScanBtn.addEventListener('click', () => {
-      this.showScreen('scanning');
-    });
+    if (backToScanBtn) {
+      backToScanBtn.addEventListener('click', () => {
+        this.showScreen('scanning');
+      });
+    }
     
     // Error dismiss button
     const errorCloseBtn = document.getElementById('error-close-btn');
-    errorCloseBtn.addEventListener('click', this.handleErrorDismiss);
+    if (errorCloseBtn) {
+      errorCloseBtn.addEventListener('click', this.handleErrorDismiss);
+    }
+    
+    // Disconnect button
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    if (disconnectBtn) {
+      disconnectBtn.addEventListener('click', this.handleDisconnect);
+    }
     
     // iOS PWA prompt close
     const iosPwaClose = document.getElementById('ios-pwa-close');
     if (iosPwaClose) {
       iosPwaClose.addEventListener('click', () => {
         const prompt = document.getElementById('ios-pwa-prompt');
-        prompt.classList.add('hidden');
-        localStorage.setItem('pwa_prompt_dismissed', 'true');
+        if (prompt) {
+          prompt.classList.add('hidden');
+          localStorage.setItem('pwa_prompt_dismissed', 'true');
+        }
       });
     }
   }
@@ -215,8 +273,11 @@ class MemoryStreamMobileApp {
     });
     
     // Update active tab content
-    Object.values(this.tabs).forEach(tab => {
-      tab.classList.toggle('active', tab.id === tabId);
+    Object.keys(this.tabContents).forEach(key => {
+      const tabContent = this.tabContents[key];
+      if (tabContent) {
+        tabContent.classList.toggle('active', `${key}-tab` === tabId);
+      }
     });
   }
   
@@ -227,7 +288,12 @@ class MemoryStreamMobileApp {
   handleManualConnect(event) {
     event.preventDefault();
     
-    const sessionIdInput = document.getElementById('session-id');
+    const sessionIdInput = document.getElementById('session-id-input');
+    if (!sessionIdInput) {
+      this.showError('Form Error', 'Session ID input not found');
+      return;
+    }
+    
     const sessionId = sessionIdInput.value.trim();
     
     if (!sessionId) {
@@ -265,141 +331,126 @@ class MemoryStreamMobileApp {
    * Connect to a session
    * @param {string} sessionId - Session ID to connect to
    */
-  async connectToSession(sessionId) {
+  connectToSession(sessionId) {
     try {
       this.showLoading('Connecting to TV...');
       
       // Stop QR scanner if running
-      if (this.components.qrScanner.isScanning) {
+      if (this.components.qrScanner && this.components.qrScanner.isScanning) {
         this.components.qrScanner.stopScanner();
       }
       
       // Store session ID
       this.sessionId = sessionId;
       
-      // Connect to socket server
-      this.connectSocket();
-      
-      // Save session to localStorage
-      localStorage.setItem('memorystream_session', JSON.stringify({
-        sessionId: this.sessionId,
-        timestamp: Date.now()
-      }));
-    } catch (error) {
-      console.error('Connection error:', error);
-      this.showError('Connection Error', error.message);
-      this.hideLoading();
-    }
-  }
-  
-  /**
-   * Connect to socket.io server
-   */
-  connectSocket() {
-    // Disconnect existing socket if any
-    if (this.socket) {
-      this.socket.disconnect();
-    }
-    
-    // Connect to socket.io server
-    this.socket = io(`${config.backendUrl}/mobile`, {
-      transports: ['websocket'],
-      query: {
-        clientType: 'mobile'
-      }
-    });
-    
-    // Socket event handlers
-    this.socket.on('connect', () => {
-      console.log('Socket connected:', this.socket.id);
-      this.connected = true;
-      
-      // Join session
-      this.socket.emit('join:session', {
-        sessionId: this.sessionId,
-        deviceInfo: {
-          type: 'mobile',
-          userAgent: navigator.userAgent,
-          platform: navigator.platform
-        }
+      // Connect through connection manager
+      this.connectionManager.connect(sessionId).catch(error => {
+        console.error('Connection error:', error);
+        this.showError('Connection Error', 'Failed to connect to the server. Please try again.');
+        this.hideLoading();
       });
-      
-      // Update connection status
-      this.components.connectionManager.updateStatus('connected');
-    });
-    
-    this.socket.on('disconnect', () => {
-      console.log('Socket disconnected');
-      this.connected = false;
-      this.components.connectionManager.updateStatus('disconnected');
-      
-      // Try to reconnect after interval
-      setTimeout(() => {
-        if (!this.connected) {
-          this.connectSocket();
-        }
-      }, config.reconnectInterval);
-    });
-    
-    this.socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
-      this.handleSocketError(error);
-    });
-    
-    this.socket.on('session:joined', (data) => {
-      console.log('Session joined:', data);
-      this.tvConnected = data.tvConnected;
+    } catch (error) {
+      console.error('Connection setup error:', error);
+      this.showError('Connection Error', error.message || 'Failed to connect');
       this.hideLoading();
-      this.showScreen('control');
-      
-      // Enable components with socket
-      this.enableComponents();
-    });
-    
-    this.socket.on('tv:status', (status) => {
-      console.log('TV status update:', status);
-      this.tvConnected = status.connected;
-      this.components.connectionManager.updateTVStatus(this.tvConnected);
-    });
-    
-    this.socket.on('response:ai', (response) => {
-      console.log('AI response received:', response);
-      this.components.chatInterface.addMessage('ai', response.text);
-    });
+    }
   }
   
   /**
-   * Enable components with socket connection
+   * Handle successful connection
    */
-  enableComponents() {
-    // Enable remote control
-    this.components.remoteControl.enable(this.socket, this.sessionId);
+  handleConnected() {
+    console.log('Successfully connected to server');
     
-    // Enable voice recorder
-    this.components.voiceRecorder.enable(this.socket, this.sessionId);
-    
-    // Enable chat interface
-    this.components.chatInterface.enable(this.socket, this.sessionId);
-    
-    // Set connection manager socket
-    this.components.connectionManager.setSocket(this.socket);
+    // Update connection status
+    if (this.components.connectionStatus) {
+      this.components.connectionStatus.classList.remove('disconnected');
+      this.components.connectionStatus.classList.add('connected');
+      this.components.connectionStatus.textContent = 'Connected';
+    }
   }
   
   /**
-   * Handle socket connection errors
-   * @param {Error} error - Socket error
+   * Handle session joined event
+   * @param {Object} data - Session data
    */
-  handleSocketError(error) {
-    this.connected = false;
-    this.components.connectionManager.updateStatus('error');
+  handleSessionJoined(data) {
+    console.log('Session joined:', data);
     
-    console.error('Socket error:', error);
+    // Save session to localStorage
+    localStorage.setItem('memorystream_session', JSON.stringify({
+      sessionId: this.sessionId,
+      timestamp: Date.now()
+    }));
+    
+    // Hide loading overlay
     this.hideLoading();
+    
+    // Show control screen
+    this.showScreen('control');
+    
+    // Initialize control components
+    this.initializeControlComponents();
+    
+    // Set initial active tab
+    this.showTab('remote');
+  }
+  
+  /**
+   * Handle disconnection
+   */
+  handleDisconnected(data) {
+    console.log('Disconnected from server:', data);
+    
+    // Update connection status
+    if (this.components.connectionStatus) {
+      this.components.connectionStatus.classList.remove('connected');
+      this.components.connectionStatus.classList.add('disconnected');
+      this.components.connectionStatus.textContent = 'Disconnected';
+    }
+    
+    // Show reconnection message if not manual
+    if (data && data.reason !== 'manual') {
+      this.showError('Disconnected', 'Connection to the TV was lost. Trying to reconnect...');
+    }
+  }
+  
+  /**
+   * Handle connection error
+   * @param {Object} error - Error data
+   */
+  handleConnectionError(error) {
+    console.error('Connection error:', error);
+    
+    // Update connection status
+    if (this.components.connectionStatus) {
+      this.components.connectionStatus.classList.remove('connected');
+      this.components.connectionStatus.classList.add('error');
+      this.components.connectionStatus.textContent = 'Error';
+    }
     
     // Show error if not already on control screen
     if (!this.screens.control.classList.contains('active')) {
       this.showError('Connection Error', 'Failed to connect to the TV. Please try again.');
+      this.hideLoading();
     }
+  }
+  
+  /**
+   * Handle manual disconnect
+   */
+  handleDisconnect() {
+    // Disconnect connection manager
+    if (this.connectionManager) {
+      this.connectionManager.disconnect();
+    }
+    
+    // Clear stored session
+    localStorage.removeItem('memorystream_session');
+    this.sessionId = null;
+    
+    // Go back to scanning screen
+    this.showScreen('scanning');
   }
   
   /**
@@ -416,7 +467,7 @@ class MemoryStreamMobileApp {
   showScreen(screenName) {
     // Hide all screens
     Object.values(this.screens).forEach(screen => {
-      if (screen.classList.contains('screen')) {
+      if (screen && screen.classList.contains('screen')) {
         screen.classList.remove('active');
       }
     });
@@ -426,11 +477,13 @@ class MemoryStreamMobileApp {
       this.screens[screenName].classList.add('active');
       
       // Additional actions based on screen
-      if (screenName === 'scanning') {
+      if (screenName === 'scanning' && this.components.qrScanner) {
         this.components.qrScanner.startScanner();
       } else if (screenName === 'control') {
-        // Set initial tab
-        this.showTab('remote');
+        // Stop QR scanner if running
+        if (this.components.qrScanner && this.components.qrScanner.isScanning) {
+          this.components.qrScanner.stopScanner();
+        }
       }
     }
   }
@@ -446,8 +499,11 @@ class MemoryStreamMobileApp {
     });
     
     // Update tab content
-    Object.keys(this.tabs).forEach(key => {
-      this.tabs[key].classList.toggle('active', key === `${tabName}-tab`);
+    Object.keys(this.tabContents).forEach(key => {
+      const tabContent = this.tabContents[key];
+      if (tabContent) {
+        tabContent.classList.toggle('active', key === tabName);
+      }
     });
   }
   
@@ -456,6 +512,8 @@ class MemoryStreamMobileApp {
    * @param {string} message - Loading message
    */
   showLoading(message) {
+    if (!this.screens.loading) return;
+    
     const loadingText = this.screens.loading.querySelector('.loading-text');
     if (loadingText && message) {
       loadingText.textContent = message;
@@ -468,7 +526,9 @@ class MemoryStreamMobileApp {
    * Hide loading overlay
    */
   hideLoading() {
-    this.screens.loading.classList.add('hidden');
+    if (this.screens.loading) {
+      this.screens.loading.classList.add('hidden');
+    }
   }
   
   /**
@@ -477,11 +537,13 @@ class MemoryStreamMobileApp {
    * @param {string} message - Error message
    */
   showError(title, message) {
+    if (!this.screens.error) return;
+    
     const errorTitle = this.screens.error.querySelector('#error-title');
     const errorMessage = this.screens.error.querySelector('#error-message');
     
-    if (errorTitle) errorTitle.textContent = title;
-    if (errorMessage) errorMessage.textContent = message;
+    if (errorTitle) errorTitle.textContent = title || 'Error';
+    if (errorMessage) errorMessage.textContent = message || 'An error occurred';
     
     this.screens.error.classList.remove('hidden');
   }
@@ -490,7 +552,9 @@ class MemoryStreamMobileApp {
    * Hide error overlay
    */
   hideError() {
-    this.screens.error.classList.add('hidden');
+    if (this.screens.error) {
+      this.screens.error.classList.add('hidden');
+    }
   }
   
   /**

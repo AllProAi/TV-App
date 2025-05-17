@@ -10,13 +10,19 @@ The project consists of three main components:
 memorystream/
 ├── backend/           # Node.js backend server
 │   ├── src/           # Server source code
+│   │   ├── index.js   # Main server file
+│   │   └── services/  # Services for AI, session management, etc.
 │   └── package.json   # Backend dependencies
 ├── tv-app/            # Senza TV application
 │   ├── src/           # TV app source code
+│   │   ├── index.js   # Entry point
+│   │   └── components/# UI Components
 │   ├── public/        # Static assets
 │   └── package.json   # TV app dependencies
 └── mobile-app/        # Mobile companion app (PWA)
     ├── src/           # Mobile app source code
+    │   ├── index.js   # Entry point
+    │   └── components/# UI Components
     ├── public/        # Static assets
     └── package.json   # Mobile app dependencies
 ```
@@ -35,13 +41,19 @@ memorystream/
 ### Prerequisites
 
 - Node.js 18.x or higher
-- pnpm package manager
-- Senza platform access (for TV app deployment)
+- pnpm package manager (`npm install -g pnpm`)
 - OpenAI API key (for AI features)
+- Modern web browser (Chrome/Edge recommended for best compatibility)
 
 ### Environment Setup
 
-Create a `.env` file in the backend directory:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/memorystream.git
+   cd memorystream
+   ```
+
+2. Create a `.env` file in the backend directory:
 
 ```
 PORT=3000
@@ -112,47 +124,97 @@ The built files will be available in the `dist` directories of each component.
 
 1. **TV App Setup**:
    - Launch the TV app in a browser or on the Senza platform
-   - A session will be created and a QR code displayed
+   - The app will connect to the backend and create a session
+   - A QR code will be displayed for mobile pairing
+   - You can select a video from the provided samples or enter a custom URL
 
 2. **Mobile Companion Setup**:
    - Open the mobile app in a browser or install the PWA
-   - Scan the QR code displayed on the TV
-   - Your devices are now paired
+   - Scan the QR code displayed on the TV using your phone's camera
+   - Your devices are now paired and ready to communicate
 
 3. **Using Remote Control**:
-   - Use the d-pad to navigate TV interface
-   - Media controls for play/pause, rewind, forward
-   - Volume controls for audio adjustment
+   - The Remote tab provides a D-pad for navigating the TV interface
+   - Media controls allow play/pause, rewind, and fast forward
+   - Volume controls adjust audio level or mute the sound
+   - Additional buttons provide functions like back, home, and settings
 
 4. **Voice Commands**:
-   - Tab to the Voice section in the mobile app
-   - Tap the microphone icon and speak your command
-   - Examples: "Play", "Pause", "Jump forward 30 seconds"
+   - Navigate to the Voice tab in the mobile app
+   - Press and hold the microphone button while speaking your command
+   - Release the button to process the command
+   - Examples: 
+     - "Play the video"
+     - "Pause"
+     - "Skip forward 30 seconds"
+     - "Volume up"
+     - "Turn on subtitles"
 
 5. **Content Q&A**:
-   - Tab to the Chat section in the mobile app
-   - Type questions about the content you're watching
-   - The AI will respond with context-aware answers
+   - Go to the Chat tab in the mobile app
+   - Type questions about what you're watching
+   - The AI will analyze the content and provide relevant answers
+   - You can tap on timestamps in the responses to jump to specific moments
+   - Example questions:
+     - "Who is that character?"
+     - "What just happened?"
+     - "Why did they do that?"
+     - "Explain the plot so far"
 
-## Architecture
+## Technical Implementation
 
-### Backend
+### Backend Architecture
 
-- Node.js with Express
-- Socket.io for real-time communication
-- OpenAI API integration for Whisper and GPT
+- **Node.js with Express**: Provides the API endpoints and manages WebSocket connections
+- **Socket.io**: Enables real-time bidirectional communication between the TV app, mobile app, and server
+- **OpenAI Integration**:
+  - Whisper API for real-time speech-to-text and subtitle generation
+  - GPT-4 for natural language understanding and content question answering
+- **Session Management**: Tracks connections between TV and mobile devices
 
-### TV App
+### TV App Implementation
 
-- Vanilla JavaScript
-- Senza SDK integration
-- ShakaPlayer for video playback
+- **Vanilla JavaScript**: Lightweight implementation for optimal performance on TV platforms
+- **ShakaPlayer**: Advanced media player for streaming video content
+- **Component Architecture**: Modular design with specialized components:
+  - `VideoPlayer`: Handles video playback and media controls
+  - `SubtitleManager`: Processes and displays real-time subtitles
+  - `RemoteNavigation`: Manages focus-based navigation for remote control
+  - `ConnectionManager`: Handles WebSocket connections with backend
+  - `AIAssistant`: Displays AI responses and content information
 
-### Mobile App
+### Mobile App Implementation
 
-- Progressive Web App (PWA)
-- WebRTC for voice capture
-- Socket.io for communication with backend
+- **Progressive Web App**: Cross-platform compatibility with native-like features
+- **Responsive Design**: Works seamlessly on various mobile devices and orientations
+- **WebRTC**: Captures voice input for command processing
+- **Socket.io Client**: Communicates with the backend in real-time
+- **Component Architecture**:
+  - `QRCodeScanner`: Scans TV pairing code
+  - `RemoteControl`: D-pad and media button interface
+  - `VoiceRecorder`: Voice command recording and processing
+  - `ChatInterface`: Text-based interaction with AI
+  - `ConnectionManager`: Robust WebSocket connection handling with auto-reconnect
+
+## Deploying to Production
+
+For a production deployment, follow these steps:
+
+1. **Backend Deployment**:
+   - Deploy to a Node.js hosting environment (AWS, Heroku, DigitalOcean, etc.)
+   - Set environment variables for `PORT`, `NODE_ENV=production`, and `OPENAI_API_KEY`
+   - Configure a production database for session storage (optional)
+
+2. **TV App Deployment**:
+   - Build the app with the correct backend URL: `BACKEND_URL=https://your-backend-url pnpm run build`
+   - Deploy the contents of the `tv-app/dist` directory to a static web server or CDN
+   - For Senza platform deployment, follow their specific deployment guidelines
+
+3. **Mobile App Deployment**:
+   - Build the app with the correct backend URL: `BACKEND_URL=https://your-backend-url pnpm run build`
+   - Deploy the contents of the `mobile-app/dist` directory to a static web server or CDN
+   - Configure your server to support HTTPS (required for PWA and WebRTC features)
+   - Set appropriate cache headers for service worker support
 
 ## Development Rules
 
@@ -163,10 +225,18 @@ The project follows a set of development rules defined in the `.cursor/rules/` d
 - `mobile-service.mdc`: Mobile companion app rules
 - `backend-service.mdc`: Backend service rules
 
+## Troubleshooting
+
+- **Connection Issues**: Ensure the backend server is running and accessible from both the TV and mobile app
+- **QR Code Scanning**: Ensure good lighting and a clear view of the QR code
+- **Voice Commands**: Check microphone permissions in your browser settings
+- **Subtitle Generation**: Verify your OpenAI API key has sufficient credits and permissions
+
 ## License
 
-Proprietary - Daniel Hill AllPro.Enterprises Novus | Nexum Labs CR 2025
+Proprietary - Daniel Hill AllPro.Enterprises Novus | Nexum Labs CR 2025 ALL RIGHTS RESERVED
 
-## Contributing
+## Contact
 
-This project was developed as part of the Senza Hackathon and is not open for public contributions at this time. 
+For questions about the project, please contact:
+- Daniel Hill, AllPro.Enterprises Novus | Nexum Labs 

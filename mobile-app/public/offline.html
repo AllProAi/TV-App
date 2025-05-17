@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#181c24">
+  <title>MemoryStream - Offline</title>
+  <style>
+    :root {
+      --color-primary: #5c6bc0;
+      --color-primary-dark: #26418f;
+      --color-background: #181c24;
+      --color-surface: #252a34;
+      --color-text: #f0f0f0;
+      --color-text-secondary: #b0b0b0;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: var(--color-background);
+      color: var(--color-text);
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    .logo {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: var(--color-primary);
+    }
+    
+    .offline-icon {
+      width: 100px;
+      height: 100px;
+      margin-bottom: 20px;
+      opacity: 0.8;
+    }
+    
+    h1 {
+      margin-bottom: 10px;
+    }
+    
+    p {
+      margin-bottom: 30px;
+      color: var(--color-text-secondary);
+      max-width: 500px;
+    }
+    
+    .btn {
+      background-color: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .btn:hover {
+      background-color: var(--color-primary-dark);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">MemoryStream</div>
+    <svg class="offline-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#5c6bc0">
+      <path d="M0 0h24v24H0z" fill="none"/>
+      <path d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L10.52 6c1.1-.17 2.26-.26 3.48-.26 5.75 0 9.3 2.74 9.73 3.03L12 14.8 8.41 12.3 14.1 18H14L7.1 10.9 8.65 12h-.01.01L3 8.28v-.01c1.07-.73 2.61-1.52 4.35-2.02L9.5 6.67 3.14 5.9C2.5 6.38 2 6.83 2 7c0 .48 3.19 3.62 10 3.62 2.94 0 5.31-.43 7-1.03v4.31c-1.77.57-4.17.82-7 .82-2.48 0-4.56-.5-6-1.11v4.07c1.73.84 4.03 1.34 6 1.34 1.14 0 2.22-.11 3.25-.29L16.3 24h3.32L6.32 2H3l9.4 12.73L8.55 13.8c-2.37-.28-4.7-.87-6.55-1.82V19c3.35 1.97 7.95 2.43 14 1.81V20h1.77C21.87 17.7 24 15 24 7c0-1.23-1.67-.27-2.5-1.34l.14 1.34c0 .43-2.69 3.25-10 3.25-.8 0-1.53-.04-2.22-.1l5.99 5.99a82 82 0 0 0 9.56-1.14L15.5 9.5C18.97 9.08 22.23 7.92 23.64 7z"/>
+    </svg>
+    <h1>You're Offline</h1>
+    <p>Unable to connect to MemoryStream servers. Please check your internet connection and try again.</p>
+    <button class="btn" onclick="window.location.reload()">Try Again</button>
+  </div>
+  
+  <script>
+    // Check for online status
+    window.addEventListener('online', () => {
+      window.location.reload();
+    });
+  </script>
+</body>
+</html> 

@@ -1,48 +1,72 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const WorkboxPlugin = require('workbox-webpack-plugin');
+const webpack = require('webpack');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
   
   return {
-    entry: './src/index.js',
+    entry: {
+      main: './src/index.js'
+    },
     output: {
       path: path.resolve(__dirname, 'dist'),
-      filename: 'bundle.[contenthash].js',
-      clean: true
+      filename: '[name].[contenthash].js',
+      publicPath: '/'
     },
+    devtool: isProduction ? 'source-map' : 'eval-source-map',
     devServer: {
       static: {
-        directory: path.join(__dirname, 'public'),
+        directory: path.join(__dirname, 'public')
       },
-      compress: true,
-      port: 8081,
       hot: true,
+      port: 8081,
       historyApiFallback: true,
-      open: true
+      compress: true
     },
     module: {
       rules: [
         {
-          test: /\.css$/,
-          use: ['style-loader', 'css-loader'],
+          test: /\.js$/,
+          exclude: /node_modules/,
+          use: {
+            loader: 'babel-loader',
+            options: {
+              presets: ['@babel/preset-env']
+            }
+          }
         },
         {
-          test: /\.(png|svg|jpg|jpeg|gif)$/i,
+          test: /\.css$/,
+          use: [
+            isProduction ? MiniCssExtractPlugin.loader : 'style-loader',
+            'css-loader'
+          ]
+        },
+        {
+          test: /\.(png|svg|jpg|jpeg|gif|webp)$/i,
           type: 'asset/resource',
+          generator: {
+            filename: 'images/[name].[hash][ext]'
+          }
         },
         {
           test: /\.(woff|woff2|eot|ttf|otf)$/i,
           type: 'asset/resource',
-        },
-      ],
+          generator: {
+            filename: 'fonts/[name].[hash][ext]'
+          }
+        }
+      ]
     },
     plugins: [
+      new CleanWebpackPlugin(),
       new HtmlWebpackPlugin({
         template: './public/index.html',
-        favicon: './public/favicon.png',
         minify: isProduction ? {
           removeComments: true,
           collapseWhitespace: true,
@@ -53,50 +77,46 @@ module.exports = (env, argv) => {
           keepClosingSlash: true,
           minifyJS: true,
           minifyCSS: true,
-          minifyURLs: true,
+          minifyURLs: true
         } : false
       }),
       new CopyWebpackPlugin({
         patterns: [
           {
             from: 'public',
+            to: '',
             globOptions: {
-              ignore: ['**/index.html', '**/favicon.png'],
-            },
-          },
-        ],
+              ignore: ['**/index.html']
+            }
+          }
+        ]
       }),
-      // Only add the service worker in production
+      new webpack.DefinePlugin({
+        'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+        'process.env.BACKEND_URL': JSON.stringify(process.env.BACKEND_URL || 'http://localhost:3000')
+      }),
       ...(isProduction ? [
-        new WorkboxPlugin.GenerateSW({
-          clientsClaim: true,
-          skipWaiting: true,
-          runtimeCaching: [
-            {
-              urlPattern: /\.(js|css|html)$/,
-              handler: 'StaleWhileRevalidate',
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com/,
-              handler: 'StaleWhileRevalidate',
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.gstatic\.com/,
-              handler: 'CacheFirst',
-            },
-          ],
+        new MiniCssExtractPlugin({
+          filename: 'styles/[name].[contenthash].css'
+        }),
+        new WorkboxPlugin.InjectManifest({
+          swSrc: './src/service-worker.js',
+          swDest: 'service-worker.js',
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5MB
         })
       ] : [])
     ],
-    resolve: {
-      extensions: ['.js'],
+    optimization: {
+      splitChunks: {
+        chunks: 'all',
+        name: false
+      },
+      runtimeChunk: 'single'
     },
-    devtool: isProduction ? 'source-map' : 'eval-source-map',
     performance: {
       hints: isProduction ? 'warning' : false,
-    },
-    optimization: {
-      minimize: isProduction,
-    },
+      maxEntrypointSize: 512000,
+      maxAssetSize: 512000
+    }
   };
 }; 
